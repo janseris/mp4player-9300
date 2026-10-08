@@ -55,6 +55,7 @@ RESOURCE MENU_PANE r_mp4player_file_menu
         MENU_ITEM { command = ECmdOpen; txt = "Open..."; },
         MENU_ITEM { command = ECmdFileInfo; txt = "File information"; },
         MENU_ITEM { command = ECmdBenchmark; txt = "Speed test (B)"; },
+        MENU_ITEM { command = ECmdAnalyze; txt = "Analyze a file... (A)"; },
         MENU_ITEM { command = ECmdAbout; txt = "About MP4 Player"; },
         MENU_ITEM { command = EEikCmdExit; txt = "Close"; }
         };

@@ -337,6 +337,18 @@ int m4v_size(M4vDec* d, int* w, int* h)
 const char* m4v_error_text(M4vDec* d) { return d->err; }
 const char* m4v_stream_info(M4vDec* d) { return d->info; }
 
+void m4v_params(M4vDec* d, M4vParams* p)
+    {
+    p->haveVol = d->haveVol;
+    p->shortHeader = d->shortHeader;
+    p->verid = d->verid;
+    p->quantType = d->quantType;
+    p->resyncMarker = d->resyncMarker;
+    p->timeIncBits = d->timeIncBits;
+    p->width = d->width;
+    p->height = d->height;
+    }
+
 /* ------------------------------------------------------------------ headers */
 
 static int parse_vol(M4vDec* d, Bits* b)

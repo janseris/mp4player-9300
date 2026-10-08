@@ -53,6 +53,29 @@ int  h264d_profile(H264Dec* d);
 /* number of slices that failed to decode (for the info screen) */
 int  h264d_errors(H264Dec* d);
 
+/* for "Analyze a file": what the stream uses */
+typedef struct
+    {
+    int nals, sei, aud, paramSets, other;   /* NAL units seen by h264d_decode */
+    int slices, iSlices, pSlices, bSlices, otherSlices, idrSlices;
+    int decoded, qpSum, deblockOff;         /* slices decoded: sum of QPs, filter switched off */
+    int maxSlicesPerSample;
+    } H264Stats;
+
+typedef struct
+    {
+    int valid;
+    int profile, level, refs, pocType, mbW, mbH, frameNumBits;
+    int crop, cropL, cropR, cropT, cropB;
+    int vui, timing, numUnitsInTick, timeScale, fixedRate, restrict_, reorder, maxDecBuf;
+    int ppsValid, sliceGroups, refIdx, initQp, chromaQpOff, deblockCtrl, constrIntra, redundant;
+    int cabac;                              /* from the avcC's first PPS (-1 unknown) */
+    int nalLen;
+    } H264Params;
+
+void h264d_stats(H264Dec* d, H264Stats* s);
+void h264d_params(H264Dec* d, H264Params* p);
+
 #ifdef __cplusplus
 }
 #endif

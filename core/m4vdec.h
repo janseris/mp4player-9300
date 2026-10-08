@@ -62,6 +62,9 @@ int  m4v_size(M4vDec* d, int* w, int* h);
 /* Short text describing the last error / the stream (for the UI). */
 const char* m4v_error_text(M4vDec* d);
 const char* m4v_stream_info(M4vDec* d);
+/* for "Analyze a file": stream parameters from the VOL (valid when haveVol) */
+struct M4vParams { int haveVol, shortHeader, verid, quantType, resyncMarker, timeIncBits, width, height; };
+void m4v_params(M4vDec* d, M4vParams* p);
 
 /* FNV-1a hash of a picture's visible pixels (Y, then U and V), chained through h.
    Start with h = 2166136261. Used to check that the phone decodes exactly like the PC. */

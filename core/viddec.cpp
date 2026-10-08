@@ -135,3 +135,18 @@ const char* viddec_stream_info(VidDec* d)
 
 int viddec_is_h264(VidDec* d) { return d->h264 != 0; }
 void viddec_set_fast(VidDec* d, int fast) { if (d && d->h264) h264d_set_fast(d->h264, fast); }
+
+int viddec_h264_info(VidDec* d, H264Params* p, H264Stats* s)
+    {
+    if (!d || !d->h264) return 0;
+    h264d_params(d->h264, p);
+    h264d_stats(d->h264, s);
+    return 1;
+    }
+
+int viddec_m4v_info(VidDec* d, M4vParams* p)
+    {
+    if (!d || !d->m4v) return 0;
+    m4v_params(d->m4v, p);
+    return 1;
+    }

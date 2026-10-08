@@ -10,7 +10,7 @@
 #include "mp4player.h"
 #include "mp4player.hrh"
 
-_LIT(KAppTitle, "MP4 Player 9300 1.24");
+_LIT(KAppTitle, "MP4 Player 9300 1.25");
 
 // ------------------------------------------------------------------ framework entry points
 
@@ -190,6 +190,9 @@ void CMp4PlayerAppUi::HandleCommandL(TInt aCommand)
         case ECmdFileInfo:
             ShowFileInfoL();
             break;
+        case ECmdAnalyze:
+            AnalyzeFileL();
+            break;
         case ECmdBenchmark:
             {
             if (iEngine->Mode() != CPlayerEngine::EModeOwn)
@@ -216,7 +219,7 @@ void CMp4PlayerAppUi::HandleCommandL(TInt aCommand)
             {
             _LIT(KText, "Plays MP4, 3GP and MOV files with MPEG-4 Part 2 (Simple Profile), H.263 or H.264 Baseline video "
                         "and AAC/AMR audio (for H.264 files the sound is copied to System\\Temp first). Keys: Space play/pause, arrows seek (Shift: 1 min) and volume, "
-                        "F full screen, Z zoom (fit, fill, original), Q H.264 auto/best/fast, K too slow video: auto/in time/smooth, M sound off, Ctrl+O open. Best: 320x200 or smaller, 12-15 fps.");
+                        "F full screen, Z zoom (fit, fill, original), Q H.264 auto/best/fast, K too slow video: auto/in time/smooth, M sound off, A analyze a file, Ctrl+O open. Best: 320x200 or smaller, 12-15 fps.");
             CCknInfoDialog::RunDlgLD(KAppTitle, KText);
             }
             break;
@@ -322,6 +325,109 @@ void CMp4PlayerAppUi::ShowFileInfoL()
     if (title.Length() == 0) title.Copy(_L("No file"));
     CCknInfoDialog::RunDlgLD(title, *text);
     CleanupStack::PopAndDestroy(text);
+    }
+
+// "Analyze a file": parameters of a video + a short decode test, without playing it. The report
+// is shown in pages and saved next to the video as <name>_analysis.txt (or on C: if that fails).
+void CMp4PlayerAppUi::AnalyzeFileL()
+    {
+    TFileName path(iLastPath);
+    if (iEngine->State() == CPlayerEngine::EPlaying) iEngine->Pause();
+    if (!CCknOpenFileDialog::RunDlgLD(path, this, _L("Analyze a video"), CCknFileListDialogBase::EShowAllDrives)) return;
+    TParsePtrC parse(path);
+    iLastPath = parse.DriveAndPath();
+    PlayerMessage(_L("Analyzing (about 10-30 s)..."));
+    iCoeEnv->WsSession().Flush();
+    HBufC* text = HBufC::NewLC(2400);
+    TPtr ptr = text->Des();
+    iEngine->Analyze(path, ptr);
+    {
+    TBuf<40> head;
+    head.Copy(KAppTitle);
+    head.Append(_L(" analysis\n"));
+    if (ptr.Length() + head.Length() <= ptr.MaxLength()) ptr.Insert(0, head);
+    }
+
+    // save: next to the video, else on C:
+    TFileName out;
+    out.Copy(parse.DriveAndPath());
+    TInt room = KMaxFileName - out.Length() - 16;
+    out.Append(parse.Name().Left(room > 0 ? room : 0));
+    out.Append(_L("_analysis.txt"));
+    TBool saved = WriteTextFile(out, ptr);
+    if (!saved)
+        {
+        out.Copy(_L("C:\\"));
+        out.Append(parse.Name().Left(KMaxFileName - 20));
+        out.Append(_L("_analysis.txt"));
+        saved = WriteTextFile(out, ptr);
+        }
+    if (saved)
+        {
+        if (ptr.Length() + out.Length() + 12 <= ptr.MaxLength()) { ptr.Append(_L("Saved as ")); ptr.Append(out); }
+        }
+    else if (ptr.Length() + 20 <= ptr.MaxLength()) ptr.Append(_L("(could not save)"));
+    PlayerMessage(_L("Analysis done. Open a video to play it."));
+
+    // show in pages of whole lines
+    const TInt KPage = 380;
+    TInt pages = 0, pos = 0;
+    while (pos < ptr.Length())
+        {
+        TInt len = ptr.Length() - pos;
+        if (len > KPage)
+            {
+            len = KPage;
+            TInt cut = ptr.Mid(pos, KPage).LocateReverse('\n');
+            if (cut > 40) len = cut + 1;
+            }
+        pages++;
+        pos += len;
+        }
+    pos = 0;
+    for (TInt page = 1; page <= pages && pos < ptr.Length(); page++)
+        {
+        TInt len = ptr.Length() - pos;
+        if (len > KPage)
+            {
+            len = KPage;
+            TInt cut = ptr.Mid(pos, KPage).LocateReverse('\n');
+            if (cut > 40) len = cut + 1;
+            }
+        HBufC* part = ptr.Mid(pos, len).AllocLC();
+        TPtr pp = part->Des();
+        for (TInt i = 0; i < pp.Length(); i++) if (pp[i] == '\n') pp[i] = ' ';
+        TBuf<40> title;
+        title.Format(_L("Analysis %d/%d"), page, pages);
+        CCknInfoDialog::RunDlgLD(title, *part);
+        CleanupStack::PopAndDestroy(part);
+        pos += len;
+        }
+    CleanupStack::PopAndDestroy(text);
+    }
+
+// ASCII text file with CRLF line ends
+TBool CMp4PlayerAppUi::WriteTextFile(const TDesC& aName, const TDesC& aText)
+    {
+    RFs& fs = iCoeEnv->FsSession();
+    HBufC8* buf = HBufC8::New(aText.Length() * 2 + 2);
+    if (!buf) return EFalse;
+    TPtr8 b = buf->Des();
+    for (TInt i = 0; i < aText.Length(); i++)
+        {
+        TUint c = aText[i];
+        if (c == '\n') b.Append(_L8("\r\n"));
+        else b.Append((TUint8)(c >= 32 && c < 127 ? c : '?'));
+        }
+    RFile f;
+    TBool ok = EFalse;
+    if (f.Replace(fs, aName, EFileWrite) == KErrNone)
+        {
+        ok = f.Write(b) == KErrNone;
+        f.Close();
+        }
+    delete buf;
+    return ok;
     }
 
 // ------------------------------------------------------------------ settings (zoom, 1:1 position)

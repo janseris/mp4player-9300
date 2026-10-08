@@ -168,8 +168,27 @@ static void parse_audio(Mp4File* f, const TrakInfo* ti)
             entry.p = s.p + 8 + skip;
             entry.len = esize - skip;
             if (find_box(entry, MP4_FOURCC('e','s','d','s'), &esds))
+                {
                 parse_esds(esds, &f->audio.objectType, &dsi, &dl);
+                if (dsi && dl > 0)
+                    {
+                    f->audio.ascLen = dl > 8 ? 8 : dl;
+                    mp_memcpy(f->audio.asc, dsi, f->audio.ascLen);
+                    }
+                }
             }
+        }
+    if (ti->stsz.len >= 12)
+        {
+        u32 fixed = rd32(ti->stsz.p + 4), n = rd32(ti->stsz.p + 8), i, sum = 0;
+        f->audio.samples = n;
+        if (fixed) sum = fixed * n;
+        else
+            {
+            if (n > (ti->stsz.len - 12) / 4) n = (ti->stsz.len - 12) / 4;
+            for (i = 0; i < n; i++) sum += rd32(ti->stsz.p + 12 + 4 * i);
+            }
+        f->audio.totalBytes = sum;
         }
     }
 
@@ -356,7 +375,12 @@ static int build_video(Mp4File* f, const TrakInfo* ti)
         }
     else for (i = 0; i < n; i++) v->key[i] = 1;
 
-    for (i = 0; i < n; i++) if ((int)v->size[i] > v->maxSize) v->maxSize = (int)v->size[i];
+    for (i = 0; i < n; i++)
+        {
+        if ((int)v->size[i] > v->maxSize) v->maxSize = (int)v->size[i];
+        v->totalBytes += v->size[i];
+        }
+    v->hasCtts = ti->ctts.len >= 8 && rd32(ti->ctts.p + 4) > 0;
     if (!v->durationMs && n) v->durationMs = v->timeMs[n - 1];
     return MP4_OK;
     }
@@ -446,12 +470,14 @@ int mp4_open(Mp4File** aFile, const MpIo* io, const MpAlloc* al)
             type != MP4_FOURCC('m','d','a','t') && type != MP4_FOURCC('w','i','d','e') &&
             type != MP4_FOURCC('f','r','e','e') && type != MP4_FOURCC('s','k','i','p'))
             break;
-        if (type == MP4_FOURCC('f','t','y','p')) sawFtyp = 1;
+        if (type == MP4_FOURCC('f','t','y','p')) { sawFtyp = 1; if (size >= 12) f->brand = rd32(hdr + 8); }
+        if (type == MP4_FOURCC('m','d','a','t')) f->mdatFirst = 1;
         if (type == MP4_FOURCC('m','o','o','v'))
             {
             Span moov;
             u8* buf;
             u32 len = size - h;
+            f->moovPos = pos;
             if (len > MAX_MOOV) { seterr(f, "moov too large"); break; }
             buf = (u8*)mp_alloc(al, len + 8);
             if (!buf) { r = MP4_ERR_NOMEM; seterr(f, "out of memory"); break; }

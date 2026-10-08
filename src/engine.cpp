@@ -1553,3 +1553,325 @@ void CPlayerEngine::Benchmark(TDes& aText)
     SeekToMs(resumeMs);
     iObserver.PlayerStateChanged();
     }
+
+// ------------------------------------------------------------------ analyze a file
+
+_LIT(KTxtFixed, " fixed");
+_LIT(KTxtCabac, "CABAC");
+_LIT(KTxtCavlc, "CAVLC");
+_LIT(KTxtMpeg, "MPEG");
+_LIT(KTxtH263, "H.263");
+_LIT(KTxtYes, "yes");
+_LIT(KTxtNo, "no");
+
+static void AppendFourcc(TDes& aText, u32 aCode)
+    {
+    for (TInt i = 3; i >= 0; i--)
+        {
+        TUint c = (aCode >> (8 * i)) & 0xFF;
+        aText.Append(c >= 32 && c < 127 ? (TChar)c : (TChar)'?');
+        }
+    }
+
+// tenths: "12.3"
+static void AppendTenths(TDes& aText, TInt aV10)
+    {
+    if (aV10 < 0) { aText.Append('-'); aV10 = -aV10; }
+    aText.AppendFormat(_L("%d.%d"), aV10 / 10, aV10 % 10);
+    }
+
+static TInt Div64(TInt aA, TInt aMul, TInt aDiv)
+    {
+    if (aDiv <= 0) return 0;
+    TInt64 v = TInt64(aA) * TInt64(aMul) / TInt64(aDiv);
+    return v.GetTInt();
+    }
+
+// "Analyze a file": what the file contains and how fast its start decodes, without playing it
+// (the current video is closed). Lines end with '\n'.
+void CPlayerEngine::Analyze(const TDesC& aFileName, TDes& aText)
+    {
+    Close();
+    aText.Zero();
+    TParsePtrC parse(aFileName);
+    TPtrC name(parse.NameAndExt());
+    aText.Append(_L("File: "));
+    aText.Append(name.Left(60));
+    aText.Append('\n');
+    TInt err = iFile.Open(iFs, aFileName, EFileRead | EFileShareReadersOnly);
+    if (err != KErrNone) err = iFile.Open(iFs, aFileName, EFileRead | EFileShareAny);
+    if (err != KErrNone) { aText.AppendFormat(_L("Cannot open the file (error %d)\n"), err); return; }
+    iFileOpen = ETrue;
+    TInt size = 0;
+    iFile.Size(size);
+    iIo.read = FileRead;
+    iIo.opaque = this;
+    iIo.size = (u32)size;
+    iRdBuf = (u8*)mp_alloc(&iAlloc, KReadAhead);
+    iRdPos = 0;
+    iRdLen = 0;
+    TInt r = mp4_open(&iMp4, &iIo, &iAlloc);
+    aText.AppendFormat(_L("Size %d kB"), size / 1024);
+    if (r != MP4_OK || !iMp4)
+        {
+        TBuf<60> why;
+        if (iMp4) AppendAscii(why, iMp4->err);
+        aText.Append(_L(". Not readable: "));
+        aText.Append(why);
+        aText.Append('\n');
+        Close();
+        return;
+        }
+    const Mp4File* f = iMp4;
+    if (f->brand) { aText.Append(_L(", brand ")); AppendFourcc(aText, f->brand); }
+    aText.Append(f->mdatFirst ? _L(", index at the end") : _L(", index at the start"));
+    aText.Append(_L(", duration "));
+    AppendTenths(aText, (TInt)(f->durationMs / 100));
+    aText.Append(_L(" s\n"));
+
+    // ---- video track
+    const Mp4VideoTrack* t = &f->video;
+    TInt frame10 = 0;
+    if (!f->hasVideo) aText.Append(_L("No video track\n"));
+    else
+        {
+        TBuf<16> codec;
+        AppendAscii(codec, mp4_codec_name(t->codec));
+        aText.AppendFormat(_L("Video: %S ("), &codec);
+        AppendFourcc(aText, t->fourcc);
+        TInt dur = (TInt)t->durationMs;
+        TInt fps100 = Div64(t->count, 100000, dur);
+        frame10 = Div64(dur, 10, t->count);
+        aText.AppendFormat(_L(") %dx%d, %d.%02d fps, %d frames\n"), t->width, t->height, fps100 / 100, fps100 % 100, t->count);
+        TInt minD = 0x7FFFFFFF, maxD = 0;
+        if (!t->hasCtts)
+            for (TInt i = 1; i < t->count; i++)
+                {
+                TInt d = (TInt)(t->timeMs[i] - t->timeMs[i - 1]);
+                if (d < minD) minD = d;
+                if (d > maxD) maxD = d;
+                }
+        aText.Append(_L(" frame time "));
+        AppendTenths(aText, frame10);
+        if (minD <= maxD) aText.AppendFormat(_L(" ms (%d-%d)"), minD, maxD);
+        else aText.Append(_L(" ms"));
+        TInt kbit = Div64((TInt)(t->totalBytes > 0x7FFFFFFF ? 0x7FFFFFFF : t->totalBytes), 8, dur);
+        aText.AppendFormat(_L(", %d kbit/s, average frame %d B, largest %d B\n"), kbit,
+                           t->count ? (TInt)(t->totalBytes / (u32)t->count) : 0, t->maxSize);
+        TInt keys = 0, gap = 0, maxGap = 0, last = -1;
+        for (TInt i = 0; i < t->count; i++)
+            if (t->key[i])
+                {
+                if (last >= 0) { gap = i - last; if (gap > maxGap) maxGap = gap; }
+                last = i;
+                keys++;
+                }
+        if (t->count - last > maxGap) maxGap = t->count - last;
+        aText.AppendFormat(_L(" key frames %d, longest gap %d frames"), keys, maxGap);
+        aText.Append(t->hasCtts ? _L(", reordered frames (B-frames)\n") : _L(", no reordering\n"));
+        }
+
+    // ---- audio track
+    if (!f->audio.present) aText.Append(_L("No audio track\n"));
+    else
+        {
+        const Mp4AudioInfo& a = f->audio;
+        aText.Append(_L("Audio: "));
+        AppendFourcc(aText, a.fourcc);
+        if (a.fourcc == MP4_FOURCC('m','p','4','a'))
+            {
+            aText.AppendFormat(_L(" object 0x%02x"), a.objectType);
+            if (a.ascLen >= 2)
+                {
+                TInt aot = a.asc[0] >> 3;
+                TInt chcfg = (a.asc[1] >> 3) & 15;
+                aText.Append(aot == 2 ? _L(" AAC-LC") : aot == 5 ? _L(" HE-AAC") : aot == 29 ? _L(" HE-AACv2") : aot == 1 ? _L(" AAC Main") : _L(" AAC"));
+                aText.AppendFormat(_L(" (type %d, ch cfg %d, ASC"), aot, chcfg);
+                for (TInt i = 0; i < a.ascLen; i++) aText.AppendFormat(_L(" %02x"), a.asc[i]);
+                aText.Append(')');
+                }
+            }
+        TInt dur = (TInt)(a.durationMs ? a.durationMs : f->durationMs);
+        TInt kbit = Div64((TInt)(a.totalBytes > 0x7FFFFFFF ? 0x7FFFFFFF : a.totalBytes), 8, dur);
+        aText.AppendFormat(_L(", %d Hz %dch, %d kbit/s\n"), a.sampleRate, a.channels, kbit);
+        }
+
+    // ---- decoder
+    if (!f->hasVideo || t->count <= 0) { Close(); return; }
+    if (t->codec != MP4_VCODEC_MPEG4 && t->codec != MP4_VCODEC_H263 && t->codec != MP4_VCODEC_H264)
+        {
+        aText.Append(_L("Not playable by the built-in decoder (codec)\n"));
+        Close();
+        return;
+        }
+    RHeap* old = EnterDecoderHeap();
+    TInt c = viddec_open(&iDec, &iAlloc, t);
+    LeaveDecoderHeap(old);
+    if (t->codec == MP4_VCODEC_H264 && t->dsiLen >= 7)
+        {
+        const u8* avcc = t->dsi;
+        aText.AppendFormat(_L(" avcC: profile %d, constraint flags %02x, level %d.%d, NAL length %d\n"),
+                           avcc[1], avcc[2], avcc[3] / 10, avcc[3] % 10, (avcc[4] & 3) + 1);
+        }
+    if (c != 0 || !iDec)
+        {
+        TBuf<70> why;
+        if (iDec) AppendAscii(why, viddec_error_text(iDec));
+        if (c == M4V_ERR_NOMEM) why.Copy(_L("not enough memory"));
+        aText.Append(_L("Built-in decoder: "));
+        aText.Append(why);
+        aText.Append('\n');
+        Close();
+        return;
+        }
+    TBool h264 = viddec_is_h264(iDec);
+
+    // the first frames into memory (60: the screen stays blocked while they decode)
+    TInt n = t->count < 60 ? t->count : 60;
+    TInt i, total;
+    u8* all = NULL;
+    TInt* offs = NULL;
+    u8* work = NULL;
+    for (;;)
+        {
+        total = 0;
+        for (i = 0; i < n; i++) total += (TInt)t->size[i] + MP_INPUT_PADDING;
+        all = (u8*)mp_alloc(&iAlloc, total);
+        offs = (TInt*)mp_alloc(&iAlloc, n * (TInt)sizeof(TInt));
+        work = (u8*)mp_alloc(&iAlloc, t->maxSize + MP_INPUT_PADDING);
+        if ((all && offs && work) || n <= 10) break;
+        mp_free(&iAlloc, all); mp_free(&iAlloc, offs); mp_free(&iAlloc, work);
+        all = NULL; offs = NULL; work = NULL;
+        n /= 2;
+        }
+    if (!all || !offs || !work)
+        {
+        mp_free(&iAlloc, all); mp_free(&iAlloc, offs); mp_free(&iAlloc, work);
+        aText.Append(_L("Decode test: not enough memory\n"));
+        Close();
+        return;
+        }
+    TInt pos = 0;
+    for (i = 0; i < n; i++)
+        {
+        offs[i] = pos;
+        FileRead(this, t->offset[i], all + pos, (TInt)t->size[i]);
+        pos += (TInt)t->size[i] + MP_INPUT_PADDING;
+        }
+
+    // decode them back to back: best quality, then (H.264) without the deblocking filter
+    TInt ms10[2] = { 0, 0 };
+    TInt cntI = 0, cntP = 0, cntSkip = 0, cntRepeat = 0, cntNone = 0, cntErr = 0;
+    H264Params hp;
+    H264Stats hs;
+    TBool haveH264 = EFalse;
+    M4vParams mp;
+    TBool haveM4v = EFalse;
+    TInt passes = h264 ? 2 : 1;
+    for (TInt pass = 0; pass < passes; pass++)
+        {
+        M4vPicture pic;
+        old = EnterDecoderHeap();
+        viddec_set_fast(iDec, pass);
+        viddec_flush(iDec);
+        LeaveDecoderHeap(old);
+        TUint t0 = User::TickCount();
+        for (i = 0; i < n; i++)
+            {
+            Mem::Copy(work, all + offs[i], (TInt)t->size[i] + MP_INPUT_PADDING);
+            TInt d = DecodeBuffer(work, (TInt)t->size[i], &pic);
+            if (pass) continue;
+            if (d == M4V_FRAME_I) cntI++;
+            else if (d == M4V_FRAME_P) cntP++;
+            else if (d == M4V_FRAME_SKIPPED) cntSkip++;
+            else if (d == M4V_FRAME_REPEAT) cntRepeat++;
+            else if (d == M4V_NOFRAME) cntNone++;
+            else cntErr++;
+            }
+        TUint dt = User::TickCount() - t0;
+        ms10[pass] = (TInt)((dt * (TUint)iTickUs / 100) / (TUint)n);
+        if (pass == 0)
+            {
+            haveH264 = viddec_h264_info(iDec, &hp, &hs);
+            haveM4v = viddec_m4v_info(iDec, &mp);
+            }
+        }
+    mp_free(&iAlloc, all);
+    mp_free(&iAlloc, offs);
+    mp_free(&iAlloc, work);
+
+    if (haveH264 && hp.valid)
+        {
+        aText.AppendFormat(_L(" SPS: profile %d level %d, %dx%d MBs"), hp.profile, hp.level, hp.mbW, hp.mbH);
+        if (hp.crop) aText.AppendFormat(_L(", crop L%d R%d T%d B%d"), hp.cropL, hp.cropR, hp.cropT, hp.cropB);
+        aText.AppendFormat(_L(", refs %d, POC type %d, frame_num %d bits"), hp.refs, hp.pocType, hp.frameNumBits);
+        if (hp.vui)
+            {
+            aText.Append(_L(", VUI"));
+            if (hp.timing) aText.AppendFormat(_L(" timing %d/%d%S"), hp.numUnitsInTick, hp.timeScale, hp.fixedRate ? &KTxtFixed() : &KNullDesC());
+            if (hp.restrict_) aText.AppendFormat(_L(" reorder %d dec buf %d"), hp.reorder, hp.maxDecBuf);
+            }
+        aText.Append('\n');
+        }
+    if (haveH264 && hp.ppsValid)
+        {
+        aText.AppendFormat(_L(" PPS: %S, QP %d, chroma QP offset %d, ref idx %d, deblock ctrl %d, constr. intra %d, slice groups %d, redundant %d\n"),
+                           hp.cabac == 1 ? &KTxtCabac() : &KTxtCavlc(), hp.initQp, hp.chromaQpOff, hp.refIdx,
+                           hp.deblockCtrl, hp.constrIntra, hp.sliceGroups, hp.redundant);
+        }
+    if (haveH264)
+        {
+        aText.AppendFormat(_L(" %d frames: %d slices (max %d per frame), I %d P %d B %d other %d, IDR %d"),
+                           n, hs.slices, hs.maxSlicesPerSample, hs.iSlices, hs.pSlices, hs.bSlices, hs.otherSlices, hs.idrSlices);
+        if (hs.decoded > 0)
+            {
+            aText.Append(_L(", average QP "));
+            AppendTenths(aText, Div64(hs.qpSum, 10, hs.decoded));
+            aText.AppendFormat(_L(", filter off in %d"), hs.deblockOff);
+            }
+        aText.AppendFormat(_L(", NAL: SEI %d AUD %d SPS/PPS %d other %d\n"), hs.sei, hs.aud, hs.paramSets, hs.other);
+        }
+    if (haveM4v && mp.haveVol)
+        {
+        if (mp.shortHeader) aText.Append(_L(" H.263 short header\n"));
+        else aText.AppendFormat(_L(" VOL: verid %d, %S quantization, resync markers %S, time bits %d\n"), mp.verid,
+                                mp.quantType ? &KTxtMpeg() : &KTxtH263(), mp.resyncMarker ? &KTxtYes() : &KTxtNo(), mp.timeIncBits);
+        }
+    if (!h264)
+        aText.AppendFormat(_L(" %d frames: I %d P %d B/skipped %d not coded %d\n"), n, cntI, cntP, cntSkip, cntRepeat);
+
+    aText.AppendFormat(_L("Decode test (%d frames): "), n);
+    if (h264)
+        {
+        aText.Append(_L("best "));
+        AppendTenths(aText, ms10[0]);
+        aText.Append(_L(" ms, fast "));
+        AppendTenths(aText, ms10[1]);
+        aText.Append(_L(" ms"));
+        }
+    else
+        {
+        AppendTenths(aText, ms10[0]);
+        aText.Append(_L(" ms"));
+        }
+    aText.Append(_L(" per frame; frame time "));
+    AppendTenths(aText, frame10);
+    aText.AppendFormat(_L(" ms; errors %d, no picture %d\n"), cntErr, cntNone);
+
+    // verdict: drawing takes about 15 ms per picture (direct drawing, 1:1)
+    TInt fastest = h264 ? ms10[1] : ms10[0];
+    TInt budget = frame10 - 150;
+    aText.Append(_L("Verdict: "));
+    if (ms10[0] <= budget) aText.Append(_L("plays at full frame rate"));
+    else if (fastest <= budget) aText.Append(_L("full frame rate only with Q fast/auto"));
+    else
+        {
+        TInt shown = Div64(1000, 10, fastest + 150);       // pictures per second, roughly
+        TInt fps10 = frame10 > 0 ? Div64(1000, 100, frame10) : 0;
+        aText.AppendFormat(_L("too slow: about %d of "), shown);
+        AppendTenths(aText, fps10);
+        aText.Append(_L(" fps. Smaller size or fewer fps needed"));
+        }
+    aText.Append('\n');
+    Close();
+    }

@@ -10,6 +10,7 @@
 #include "mpcommon.h"
 #include "m4vdec.h"
 #include "mp4demux.h"
+#include "h264/h264dec.h"
 
 struct VidDec;
 
@@ -25,5 +26,8 @@ const char* viddec_stream_info(VidDec* d);
 int  viddec_is_h264(VidDec* d);
 /* H.264 only: 1 = skip the deblocking filter (faster) */
 void viddec_set_fast(VidDec* d, int fast);
+/* for "Analyze a file" (return 0 if the decoder is of the other kind) */
+int  viddec_h264_info(VidDec* d, H264Params* p, H264Stats* s);
+int  viddec_m4v_info(VidDec* d, M4vParams* p);
 
 #endif

@@ -35,6 +35,8 @@ struct Mp4VideoTrack
     u32* timeMs;                /* presentation time of each sample */
     u8* key;                    /* 1 = sync sample */
     int maxSize;                /* largest sample */
+    int hasCtts;                /* composition offsets: B-frames / reordering */
+    u32 totalBytes;
     };
 
 struct Mp4AudioInfo
@@ -45,6 +47,9 @@ struct Mp4AudioInfo
     int channels;
     int sampleRate;
     u32 durationMs;
+    u32 samples, totalBytes;    /* from the sample size table */
+    u8 asc[8];                  /* AAC AudioSpecificConfig (start) */
+    int ascLen;
     };
 
 struct Mp4File
@@ -58,6 +63,9 @@ struct Mp4File
     u32 audioTrakLen;
     u8* mvhd;                   /* copy of the 'mvhd' box (with its header) */
     u32 mvhdLen;
+    u32 brand;                  /* ftyp major brand */
+    u32 moovPos;                /* file offset of the moov box */
+    int mdatFirst;              /* media data before the moov box (not "fast start") */
     char err[48];
     };
 

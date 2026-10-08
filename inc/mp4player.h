@@ -69,6 +69,7 @@ public:
     TBool HasAudio() const { return iAudioReady; }
     void InfoText(TDes& aText);
     void Benchmark(TDes& aText);    // times decode / colour / draw in long loops
+    void Analyze(const TDesC& aFileName, TDes& aText);  // file parameters + decode test, no playing
     TInt DroppedFrames() const { return iDropped; }
     // H.264 without the deblocking filter: faster, a little blocky. Auto: only for videos
     // bigger than 320x240, which the phone can't decode at full speed otherwise.
@@ -351,6 +352,8 @@ public:
     void SetFullScreenL(TBool aFull);
     void UpdateCbaL();
     void ShowFileInfoL();
+    void AnalyzeFileL();
+    TBool WriteTextFile(const TDesC& aName, const TDesC& aText);
     static TInt StartupOpen(TAny* aSelf);
     CVideoView* iView;
     CPlayerEngine* iEngine;

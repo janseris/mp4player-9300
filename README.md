@@ -224,6 +224,15 @@ So the player brings its own:
   decoding ahead, 271 without (with sound, without it: 268). Too little for 3 MB and a more
   complicated playback loop (the phone has only ~5 ms per frame to fill the queue).
 - **1.24**: decoding ahead removed again (as in 1.22, plus the converter's 4 s key frames).
+- **1.25**: **Analyze a file** (File menu, A): pick a video and the player reports what it
+  contains without playing it: container (brand, index at the start or end), video codec, size,
+  fps, bitrate, frame sizes, key frame gaps, B-frames; for H.264 the avcC/SPS/PPS settings
+  (profile, level, CAVLC/CABAC, reference frames, cropping, slice groups...) and, over the first
+  60 frames, slices per frame, slice types, average QP and the deblocking filter; for MPEG-4 the
+  VOL settings; the audio codec with its AAC config and bitrate. Then it decodes the first 60
+  frames twice (best and fast) and compares the time with the frame time. The report is shown
+  in pages and saved next to the video as `<name>_analysis.txt` (on C:\ if that fails), so the
+  parameters can be reported and a similar test clip made on the PC.
 
 ## Install
 
@@ -260,6 +269,7 @@ If the phone's speed test shows the same check value, its decoding is bit-identi
 | D | direct drawing on/off (see 1.14; remembered) |
 | I (Ctrl+I) | file information: frames shown and skipped, time per step, codecs |
 | B | speed test (see Status) |
+| A | analyze a file: parameters and a decode test without playing it (see 1.25) |
 
 Playback pauses when the app goes to the background. If the phone falls behind on a big video,
 it skips frames and, when it's more than 1.5 s late, jumps to the next key frame.
@@ -351,6 +361,8 @@ tools/runtests.sh     # builds test/m4vtest, encodes test clips with ffmpeg, com
 the three codecs) to raw I420 and prints the check value. `test/fuzz.cpp` is the corruption test
 (build it with `-fsanitize=address,undefined`). `test/audiocopy.cpp in.mp4 out.mp4` writes the
 audio-only copy; `test/fuzzaudio.cpp` is its corruption test.
+`MAIN=$PWD/test/analyze.cpp tools/build_host.sh /tmp/analyze` builds the PC version of the
+analysis data (`/tmp/analyze in.mp4`).
 
 ## ARM emulator (tools/armemu)
 
