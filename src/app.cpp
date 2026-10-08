@@ -10,7 +10,7 @@
 #include "mp4player.h"
 #include "mp4player.hrh"
 
-_LIT(KAppTitle, "MP4 Player 9300 1.21");
+_LIT(KAppTitle, "MP4 Player 9300 1.22");
 
 // ------------------------------------------------------------------ framework entry points
 
@@ -166,6 +166,19 @@ void CMp4PlayerAppUi::HandleCommandL(TInt aCommand)
             iEngine->RedrawCurrentFrame();
             SaveSettings();
             break;
+        case ECmdBehind:
+            // auto -> keep in time -> smooth -> auto
+            if (iEngine->Behind() == CPlayerEngine::EBehindAuto) iEngine->SetBehind(CPlayerEngine::EBehindSync);
+            else if (iEngine->Behind() == CPlayerEngine::EBehindSync) iEngine->SetBehind(CPlayerEngine::EBehindSmooth);
+            else iEngine->SetBehind(CPlayerEngine::EBehindAuto);
+            if (iEngine->Behind() == CPlayerEngine::EBehindSync)
+                PlayerMessage(_L("Too slow video: keep in time (few pictures, jumps ahead early)"));
+            else if (iEngine->Behind() == CPlayerEngine::EBehindSmooth)
+                PlayerMessage(_L("Too slow video: smooth (more pictures, runs slower, jumps later)"));
+            else
+                PlayerMessage(_L("Too slow video: auto (keep in time with sound, smooth without)"));
+            SaveSettings();
+            break;
         case ECmdSound:
             iEngine->SetSoundOff(!iEngine->SoundOff());
             if (iEngine->SoundOff())
@@ -190,7 +203,7 @@ void CMp4PlayerAppUi::HandleCommandL(TInt aCommand)
             TPtr ptr = text->Des();
             iEngine->Benchmark(ptr);
             {
-            TBuf<100> set;
+            TBuf<160> set;
             SettingsText(set);
             if (ptr.Length() + set.Length() <= ptr.MaxLength()) ptr.Insert(0, set);
             }
@@ -203,7 +216,7 @@ void CMp4PlayerAppUi::HandleCommandL(TInt aCommand)
             {
             _LIT(KText, "Plays MP4, 3GP and MOV files with MPEG-4 Part 2 (Simple Profile), H.263 or H.264 Baseline video "
                         "and AAC/AMR audio (for H.264 files the sound is copied to System\\Temp first). Keys: Space play/pause, arrows seek (Shift: 1 min) and volume, "
-                        "F full screen, Z zoom (fit, fill, original), Q H.264 auto/best/fast, M sound off (faster video), Ctrl+O open. Best: 320x200 or smaller, 12-15 fps.");
+                        "F full screen, Z zoom (fit, fill, original), Q H.264 auto/best/fast, K too slow video: auto/in time/smooth, M sound off, Ctrl+O open. Best: 320x200 or smaller, 12-15 fps.");
             CCknInfoDialog::RunDlgLD(KAppTitle, KText);
             }
             break;
@@ -299,7 +312,7 @@ void CMp4PlayerAppUi::ShowFileInfoL()
     TPtr ptr = text->Des();
     iEngine->InfoText(ptr);
     {
-    TBuf<100> set;
+    TBuf<160> set;
     SettingsText(set);
     if (ptr.Length() + set.Length() <= ptr.MaxLength()) ptr.Insert(0, set);
     }
@@ -335,6 +348,8 @@ void CMp4PlayerAppUi::LoadSettings()
             iView->SetDirect(d[5] == 0, st);
             }
         if (d.Length() >= 7) iEngine->SetSoundOff(d[6] != 0);      // byte 6: sound off
+        if (d.Length() >= 8 && d[7] <= CPlayerEngine::EBehindSmooth)   // byte 7: too slow video
+            iEngine->SetBehind((CPlayerEngine::TBehind)d[7]);
         }
     f.Close();
     }
@@ -351,6 +366,7 @@ void CMp4PlayerAppUi::SaveSettings()
     d.Append((TUint8)iView->DirectState());
     d.Append((TUint8)(iView->DirectEnabled() ? 0 : 1));
     d.Append((TUint8)(iEngine->SoundOff() ? 1 : 0));
+    d.Append((TUint8)iEngine->Behind());
     fs.MkDirAll(KSettingsFile);     // the folder usually exists already
     if (f.Replace(fs, KSettingsFile, EFileWrite) != KErrNone) return;
     f.Write(d);
@@ -383,7 +399,14 @@ void CMp4PlayerAppUi::SettingsText(TDes& aText)
     if (!iView->DirectEnabled()) aText.Append(_L(" | D off"));
     else if (iView->DirectState() == CVideoView::EDirectFailed) aText.Append(_L(" | D on, test failed"));
     else aText.Append(iEngine->LastDirect() ? _L(" | D on, used") : _L(" | D on, not used"));
-    aText.Append(iEngine->SoundOff() ? _L(" | M no sound] ") : _L(" | M sound] "));
+    aText.Append(iEngine->SoundOff() ? _L(" | M no sound") : _L(" | M sound"));
+    switch (iEngine->Behind())
+        {
+        case CPlayerEngine::EBehindSync: aText.Append(_L(" | K sync")); break;
+        case CPlayerEngine::EBehindSmooth: aText.Append(_L(" | K smooth")); break;
+        default: aText.Append(iEngine->SyncNow() ? _L(" | K auto=sync") : _L(" | K auto=smooth")); break;
+        }
+    aText.Append(iEngine->TooSlow() ? _L(", too slow] ") : _L("] "));
     }
 
 void CMp4PlayerAppUi::ShowZoomMessage()

@@ -632,6 +632,7 @@ TKeyResponse CVideoView::OfferKeyEventL(const TKeyEvent& aKeyEvent, TEventCode a
         case 'q': case 'Q': cmd = ECmdFastH264; break;
         case 'd': case 'D': cmd = ECmdDirect; break;
         case 'm': case 'M': cmd = ECmdSound; break;
+        case 'k': case 'K': cmd = ECmdBehind; break;
         case 's': case 'S': cmd = ECmdStop; break;
         case 'o': case 'O': cmd = ECmdOpen; break;
         case EKeyEscape:

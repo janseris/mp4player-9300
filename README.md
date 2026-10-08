@@ -203,6 +203,18 @@ So the player brings its own:
   when decoding alone is too slow; it also says when the sound wasn't prepared because Space
   was pressed during "Preparing the sound".
 
+- **1.22**: three adaptive things.
+  - **Read-ahead**: the video file is read in 64 KB pieces, one file server request for many
+    frames instead of one per frame (about 1 ms per frame in the speed test's "read").
+  - **Auto H.264 mode measures** (Q auto): it starts with a guess by size (fast above 320×240),
+    then every 45 frames compares decode + colour + draw with the frame time: too slow → fast,
+    plenty of time left (decode × 1.35 + drawing under 85% of the frame time) → best again.
+  - **Too slow video (K)**, when decoding alone takes longer than the frame time: *keep in time*
+    draws every 500 ms and jumps to the next key frame when 0.5 s behind (instead of 1.5 s);
+    *smooth* gives drawing about a quarter of the time (4 × the drawing time, 60–250 ms) and
+    jumps at 1.5 s; *auto* keeps in time when there is sound and is smooth without. The settings
+    line shows it as `K auto=sync` / `K auto=smooth`, plus `too slow` when that's the case.
+
 ## Install
 
 `bin/mp4player.sis` (unsigned; Symbian 7.0s installs it after a warning). You can install it through
@@ -233,6 +245,7 @@ If the phone's speed test shows the same check value, its decoding is bit-identi
 | Z (Ctrl+Z) | zoom: **fit** (whole picture) → **fill** (crops the edges so the picture fills the area, like SmartMovie's crop mode) → **1:1** (no scaling, the fastest: a video bigger than the area is cut, not shrunk) |
 | C | 1:1: show the **top / middle / bottom** part of a video taller than the area (switches to 1:1 first). Zoom and position are remembered (`C:\System\Data\mp4player9300.ini`) |
 | Q | H.264 **auto / best / fast**: fast skips the deblocking filter, about 30% less decoding work, a little blocky; auto uses it for videos bigger than 320×240 (remembered) |
+| K | too slow video: auto / keep in time / smooth (see 1.22; remembered) |
 | M | sound on/off: off leaves the phone's audio decoding out, a little more time for the video (remembered) |
 | D | direct drawing on/off (see 1.14; remembered) |
 | I (Ctrl+I) | file information: frames shown and skipped, time per step, codecs |

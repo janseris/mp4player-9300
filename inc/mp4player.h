@@ -79,6 +79,12 @@ public:
     void SetSoundOff(TBool aOff);
     TBool SoundOff() const { return iSoundOff; }
     TBool LastDirect() const { return iLastDirect; }    // the last picture went straight to the screen
+    // a video too slow to decode in time: keep in time with the sound, or draw more (smooth)
+    enum TBehind { EBehindAuto, EBehindSync, EBehindSmooth };
+    void SetBehind(TBehind aMode) { iBehind = aMode; }
+    TBehind Behind() const { return iBehind; }
+    TBool SyncNow() const;
+    TBool TooSlow() const { return iTooSlow; }
     TBool FastNow() const;
     TInt ShownFrames() const { return iShown; }
 
@@ -219,7 +225,15 @@ private:
     TInt MaxNoShowMs();
     TBool iTooSlow;             // decoding alone is slower than the frame rate
     TBool iSlowChecked;
-    TBool iCopySkipped;         // Space pressed while the sound was being prepared          // the last picture went straight to the screen (the bitmap is older)
+    TBool iCopySkipped;         // Space pressed while the sound was being prepared
+    u8* iRdBuf;                 // read-ahead buffer (KReadAhead bytes at iRdPos, iRdLen valid)
+    u32 iRdPos;
+    TInt iRdLen;
+    TBool iAutoFast;            // auto H.264 mode's current choice
+    TInt iAutoN0;               // decode statistics at the last check
+    TUint32 iAutoDec0, iAutoTick0;
+    TBehind iBehind;
+    void AutoFastCheck();          // the last picture went straight to the screen (the bitmap is older)
     };
 
 // ------------------------------------------------------------------ view

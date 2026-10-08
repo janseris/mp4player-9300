@@ -6,10 +6,14 @@
 #include "mp4player.h"
 
 const TInt KMaxLateMs = 1500;           // further behind than this: jump to the next key frame
+const TInt KMaxLateSyncMs = 500;        // ... when a too slow video keeps in time with the sound
+const TInt KReadAhead = 0x10000;        // file read-ahead buffer
 const TInt KMaxRunMs = 250;             // longest decoding stretch without showing a picture
 const TInt KBehindMs = 40;              // further behind than this: decode the next frame unshown
 const TInt KMaxNoShowMs = 1000;         // but show a picture at least this often
 const TInt KMaxNoShowSlowMs = 250;      // ... or this often when decoding alone is too slow
+const TInt KMaxNoShowSyncMs = 500;      // ... (keeping in time with the sound)
+const TInt KMaxNoShowSmoothMinMs = 60;  // ... (smooth: a quarter of the time for drawing)
 const TInt KAudioSyncTicksMs = 1000;
 const TInt KAudioSyncTolerance = 200;
 const TInt KAudioSyncSmall = 40;
@@ -92,9 +96,27 @@ void CPlayerEngine::HeapFree(void* aOpaque, void* aPtr)
     else User::Free(aPtr);
     }
 
+// Reads go through a 64 KB read-ahead buffer: one file server request for many video samples
+// (each request is a switch to the file server and back). Big reads bypass it.
 int CPlayerEngine::FileRead(void* aOpaque, u32 aOffset, void* aBuf, int aLen)
     {
     CPlayerEngine* self = (CPlayerEngine*)aOpaque;
+    if (self->iRdBuf && aLen > 0 && aLen <= KReadAhead / 4)
+        {
+        if (aOffset < self->iRdPos || aOffset + (u32)aLen > self->iRdPos + (u32)self->iRdLen)
+            {
+            TPtr8 rd(self->iRdBuf, 0, KReadAhead);
+            self->iRdPos = aOffset;
+            self->iRdLen = 0;
+            if (self->iFile.Read((TInt)aOffset, rd, KReadAhead) != KErrNone) return -1;
+            self->iRdLen = rd.Length();
+            }
+        TInt n = (TInt)(self->iRdPos + (u32)self->iRdLen - aOffset);
+        if (n > aLen) n = aLen;
+        if (n <= 0) return 0;
+        Mem::Copy(aBuf, self->iRdBuf + (aOffset - self->iRdPos), n);
+        return n;
+        }
     TPtr8 des((TUint8*)aBuf, 0, aLen);
     TInt err = self->iFile.Read((TInt)aOffset, des, aLen);
     if (err != KErrNone) return -1;
@@ -207,6 +229,9 @@ void CPlayerEngine::ResetCore()
     if (iSample) { mp_free(&iAlloc, iSample); iSample = NULL; }
     iSampleCap = 0;
     iHavePic = EFalse;
+    if (iRdBuf) { mp_free(&iAlloc, iRdBuf); iRdBuf = NULL; }
+    iRdPos = 0;
+    iRdLen = 0;
     }
 
 void CPlayerEngine::Close()
@@ -252,6 +277,9 @@ void CPlayerEngine::OpenL(const TDesC& aFileName)
     User::LeaveIfError(iFile.Size(size));
     iIo.read = FileRead;
     iIo.opaque = this;
+    iRdBuf = (u8*)mp_alloc(&iAlloc, KReadAhead);      // without it, reads go straight to the file
+    iRdPos = 0;
+    iRdLen = 0;
     iIo.size = (u32)size;
 
     TInt r = mp4_open(&iMp4, &iIo, &iAlloc);
@@ -276,6 +304,9 @@ void CPlayerEngine::OpenL(const TDesC& aFileName)
         RHeap* old = EnterDecoderHeap();
         TInt c = viddec_open(&iDec, &iAlloc, &iMp4->video);
         LeaveDecoderHeap(old);
+        // auto mode starts with a guess by size; AutoFastCheck() then measures
+        iAutoFast = iMp4->video.width * iMp4->video.height > 320 * 240;
+        iAutoN0 = 0; iAutoDec0 = 0; iAutoTick0 = 0;
         ApplyFastMode();
         own = ETrue;
         if (c == M4V_ERR_NOMEM && !iDec) User::Leave(KErrNoMemory);
@@ -1069,7 +1100,45 @@ TInt CPlayerEngine::MaxNoShowMs()
         iTooSlow = dec10 * 100 > frame10 * 95;
         iSlowChecked = ETrue;
         }
-    return iTooSlow ? KMaxNoShowSlowMs : KMaxNoShowMs;
+    if (!iTooSlow) return KMaxNoShowMs;
+    if (SyncNow()) return KMaxNoShowSyncMs;
+    // smooth: drawing may take about a quarter of the time
+    TInt show10 = iProfShown ? ProfMs10(iProfConv, iTickConv, iProfShown) + ProfMs10(iProfBlit, iTickBlit, iProfShown) : 300;
+    TInt ms = (show10 * 4) / 10;
+    if (ms < KMaxNoShowSmoothMinMs) ms = KMaxNoShowSmoothMinMs;
+    if (ms > KMaxNoShowSlowMs) ms = KMaxNoShowSlowMs;
+    return ms;
+    }
+
+// keep in time with the sound (draw rarely, jump ahead early) or draw more (smoother, slower)
+TBool CPlayerEngine::SyncNow() const
+    {
+    if (iBehind == EBehindSync) return ETrue;
+    if (iBehind == EBehindSmooth) return EFalse;
+    return iAudioPlaying || (iAudio && iAudioReady);
+    }
+
+// Auto H.264 mode, measured: every 45 frames, if decoding + drawing doesn't fit in the frame
+// time, the deblocking filter goes off; it comes back when there is plenty of time left.
+void CPlayerEngine::AutoFastCheck()
+    {
+    if (iFastMode != EFastAuto || !iDec || !viddec_is_h264(iDec) || !iMp4 || iMp4->video.count <= 0) return;
+    TInt n = iProfDecoded - iAutoN0;
+    if (n < 45) return;
+    TInt dec10 = ProfMs10(iProfDecode - iAutoDec0, iTickDecode - iAutoTick0, n);
+    TInt show10 = iProfShown ? ProfMs10(iProfConv, iTickConv, iProfShown) + ProfMs10(iProfBlit, iTickBlit, iProfShown) : 0;
+    TInt frame10 = (TInt)((TInt64((TInt)iMp4->video.durationMs) * TInt64(10) / TInt64(iMp4->video.count)).GetTInt());
+    TBool fast = iAutoFast;
+    if (!fast && dec10 + show10 > frame10) fast = ETrue;
+    else if (fast && (dec10 * 135) / 100 + show10 < (frame10 * 85) / 100) fast = EFalse;
+    iAutoN0 = iProfDecoded;
+    iAutoDec0 = iProfDecode;
+    iAutoTick0 = iTickDecode;
+    if (fast != iAutoFast)
+        {
+        iAutoFast = fast;
+        ApplyFastMode();
+        }
     }
 
 TInt CPlayerEngine::ProfMs10(TUint32 aFast, TUint32 aTicks, TInt aCount)
@@ -1182,7 +1251,7 @@ void CPlayerEngine::RunL()
     TBool pic = EFalse;
 
     // far behind (slow phone, big video): skip to the latest key frame that is due
-    if (iNext < count && now - (TInt)t->timeMs[iNext] > KMaxLateMs)
+    if (iNext < count && now - (TInt)t->timeMs[iNext] > ((iTooSlow && SyncNow()) ? KMaxLateSyncMs : KMaxLateMs))
         {
         TInt k = mp4_key_before(t, mp4_sample_at(t, (u32)now));
         if (k > iNext)
@@ -1215,6 +1284,7 @@ void CPlayerEngine::RunL()
         if (iNext >= count || now - (TInt)t->timeMs[iNext] < KBehindMs) break;   // caught up
         if ((TInt)(((User::TickCount() - tick) * (TUint)iTickUs) / 1000) >= KMaxRunMs) break;
         }
+    if (decoded) AutoFastCheck();
     TBool show = pic;
     if (pic && iNext < count && now - (TInt)t->timeMs[iNext] >= KBehindMs &&
         (TInt)(((User::TickCount() - iLastShowTick) * (TUint)iTickUs) / 1000) < MaxNoShowMs())
@@ -1261,7 +1331,7 @@ TBool CPlayerEngine::FastNow() const
     if (!iDec || !viddec_is_h264(iDec)) return EFalse;
     if (iFastMode == EFastOn) return ETrue;
     if (iFastMode == EFastOff || !iMp4) return EFalse;
-    return iMp4->video.width * iMp4->video.height > 320 * 240;
+    return iAutoFast;
     }
 
 void CPlayerEngine::ApplyFastMode()
