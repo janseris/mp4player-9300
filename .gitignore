@@ -1,0 +1,9 @@
+# builds and scratch
+bin/old/
+group_*/
+test/m4vtest
+test/fuzz
+test/audiocopy
+test/fuzzaudio
+__pycache__/
+*.pyc

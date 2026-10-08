@@ -1,0 +1,90 @@
+// MP4 Player 9300 - resources
+NAME MP4P
+
+#include <eikon.rh>
+#include <eikcore.rsg>
+#include "mp4player.hrh"
+
+RESOURCE RSS_SIGNATURE { }
+RESOURCE TBUF r_default_document_name { buf=""; }
+
+RESOURCE EIK_APP_INFO
+    {
+    hotkeys = r_mp4player_hotkeys;
+    menubar = r_mp4player_menubar;
+    cba = r_mp4player_cba;
+    }
+
+RESOURCE HOTKEYS r_mp4player_hotkeys
+    {
+    control =
+        {
+        HOTKEY { command = ECmdOpen; key = 'o'; },
+        HOTKEY { command = ECmdFullScreen; key = 'f'; },
+        HOTKEY { command = ECmdZoom; key = 'z'; },
+        HOTKEY { command = ECmdFileInfo; key = 'i'; },
+        HOTKEY { command = EEikCmdExit; key = 'e'; }
+        };
+    }
+
+RESOURCE CBA r_mp4player_cba
+    {
+    buttons =
+        {
+        CBA_BUTTON { id = ECmdOpen; txt = "Open"; },
+        CBA_BUTTON { id = ECmdPlayPause; txt = "Play"; },
+        CBA_BUTTON { id = ECmdStop; txt = "Stop"; },
+        CBA_BUTTON { id = EEikCmdExit; txt = "Close"; }
+        };
+    }
+
+RESOURCE MENU_BAR r_mp4player_menubar
+    {
+    titles =
+        {
+        MENU_TITLE { menu_pane = r_mp4player_file_menu; txt = "File"; },
+        MENU_TITLE { menu_pane = r_mp4player_play_menu; txt = "Playback"; },
+        MENU_TITLE { menu_pane = r_mp4player_view_menu; txt = "View"; }
+        };
+    }
+
+RESOURCE MENU_PANE r_mp4player_file_menu
+    {
+    items =
+        {
+        MENU_ITEM { command = ECmdOpen; txt = "Open..."; },
+        MENU_ITEM { command = ECmdFileInfo; txt = "File information"; },
+        MENU_ITEM { command = ECmdBenchmark; txt = "Speed test (B)"; },
+        MENU_ITEM { command = ECmdAbout; txt = "About MP4 Player"; },
+        MENU_ITEM { command = EEikCmdExit; txt = "Close"; }
+        };
+    }
+
+RESOURCE MENU_PANE r_mp4player_play_menu
+    {
+    items =
+        {
+        MENU_ITEM { command = ECmdPlayPause; txt = "Play / pause"; },
+        MENU_ITEM { command = ECmdStop; txt = "Stop"; },
+        MENU_ITEM { command = ECmdRestart; txt = "Play from start"; },
+        MENU_ITEM { command = ECmdSeekBack; txt = "Back 10 s"; },
+        MENU_ITEM { command = ECmdSeekFwd; txt = "Forward 10 s"; },
+        MENU_ITEM { command = ECmdSeekBackLong; txt = "Back 1 min"; },
+        MENU_ITEM { command = ECmdSeekFwdLong; txt = "Forward 1 min"; },
+        MENU_ITEM { command = ECmdVolUp; txt = "Volume up"; },
+        MENU_ITEM { command = ECmdVolDown; txt = "Volume down"; },
+        MENU_ITEM { command = ECmdSound; txt = "Sound on / off: off = faster video (M)"; }
+        };
+    }
+
+RESOURCE MENU_PANE r_mp4player_view_menu
+    {
+    items =
+        {
+        MENU_ITEM { command = ECmdFullScreen; txt = "Full screen"; },
+        MENU_ITEM { command = ECmdZoom; txt = "Zoom: fit / fill / 1:1 (Z)"; },
+        MENU_ITEM { command = ECmdCropPos; txt = "1:1 position: top / middle / bottom (C)"; },
+        MENU_ITEM { command = ECmdFastH264; txt = "H.264: auto / best / fast (Q)"; },
+        MENU_ITEM { command = ECmdDirect; txt = "Direct drawing on / off (D)"; }
+        };
+    }

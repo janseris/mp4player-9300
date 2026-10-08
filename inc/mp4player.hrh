@@ -1,0 +1,27 @@
+#ifndef MP4PLAYER_HRH
+#define MP4PLAYER_HRH
+
+enum TMp4PlayerCommands
+    {
+    ECmdOpen = 0x1000,
+    ECmdPlayPause,
+    ECmdStop,
+    ECmdSeekBack,
+    ECmdSeekFwd,
+    ECmdSeekBackLong,
+    ECmdSeekFwdLong,
+    ECmdVolUp,
+    ECmdVolDown,
+    ECmdFullScreen,
+    ECmdZoom,
+    ECmdFileInfo,
+    ECmdAbout,
+    ECmdRestart,
+    ECmdBenchmark,
+    ECmdCropPos,
+    ECmdFastH264,
+    ECmdDirect,
+    ECmdSound
+    };
+
+#endif

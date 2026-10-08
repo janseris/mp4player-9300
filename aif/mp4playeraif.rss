@@ -1,0 +1,23 @@
+// MP4 Player 9300 - application information file (caption, icons, file types)
+#include <aiftool.rh>
+
+RESOURCE AIF_DATA
+    {
+    app_uid = 0x0F5A9301;
+    num_icons = 2;
+    embeddability = KAppNotEmbeddable;
+    newfile = KAppDoesNotSupportNewFile;
+    caption_list =
+        {
+        CAPTION { code = ELangEnglish; caption = "MP4 Player"; },
+        CAPTION { code = ELangCzech; caption = "MP4 Player"; }
+        };
+    // low priority: the phone's own players keep their file types; files nobody else opens come here
+    datatype_list =
+        {
+        DATATYPE { priority = EDataTypePriorityLow; type = "video/mp4"; },
+        DATATYPE { priority = EDataTypePriorityLow; type = "video/3gpp"; },
+        DATATYPE { priority = EDataTypePriorityLow; type = "video/3gpp2"; },
+        DATATYPE { priority = EDataTypePriorityLow; type = "video/quicktime"; }
+        };
+    }

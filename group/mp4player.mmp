@@ -1,0 +1,38 @@
+// MP4 Player 9300 - Series 80 2.0 (Nokia 9300/9500), Symbian 7.0s
+TARGET            mp4player.app
+TARGETTYPE        app
+UID               0x100039CE 0x0F5A9301
+TARGETPATH        \system\apps\mp4player
+LANG              SC
+
+SOURCEPATH        ..\src
+SOURCE            app.cpp view.cpp engine.cpp
+
+SOURCEPATH        ..\core
+SOURCE            mpcommon.cpp mp4demux.cpp m4vdec.cpp idct.cpp yuv2rgb.cpp viddec.cpp
+
+// H.264 Baseline: h264bsd (Apache 2.0, from AOSP via github.com/oneam/h264bsd), see core/h264
+SOURCEPATH        ..\core\h264
+SOURCE            h264dec.c h264port.cpp h264bsd_arm.c
+SOURCE            h264bsd_byte_stream.c h264bsd_cavlc.c h264bsd_conceal.c h264bsd_deblocking.c
+SOURCE            h264bsd_decoder.c h264bsd_dpb.c h264bsd_image.c h264bsd_inter_prediction.c
+SOURCE            h264bsd_intra_prediction.c h264bsd_macroblock_layer.c h264bsd_nal_unit.c
+SOURCE            h264bsd_neighbour.c h264bsd_pic_order_cnt.c h264bsd_pic_param_set.c
+SOURCE            h264bsd_reconstruct.c h264bsd_sei.c h264bsd_seq_param_set.c h264bsd_slice_data.c
+SOURCE            h264bsd_slice_group_map.c h264bsd_slice_header.c h264bsd_storage.c
+SOURCE            h264bsd_stream.c h264bsd_transform.c h264bsd_util.c h264bsd_vlc.c h264bsd_vui.c
+
+SOURCEPATH        ..\group
+RESOURCE          mp4player.rss
+
+USERINCLUDE       ..\inc ..\core ..\core\h264
+SYSTEMINCLUDE     \epoc32\include
+
+LIBRARY           euser.lib apparc.lib cone.lib eikcore.lib eikcoctl.lib bafl.lib egul.lib
+LIBRARY           ckndlg.lib ckncore.lib efsrv.lib fbscli.lib gdi.lib ws32.lib
+LIBRARY           mediaclientaudio.lib mediaclientvideo.lib bitgdi.lib
+
+// -O2: decoding ~19 % faster than the SDK's -O on the 9300 (tested with 1.2)
+OPTION            GCC -O2
+
+AIF               mp4player.aif ..\aif mp4playeraif.rss c16 icon25.bmp icon25m.bmp icon64.bmp icon64m.bmp
