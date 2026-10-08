@@ -10,7 +10,7 @@
 #include "mp4player.h"
 #include "mp4player.hrh"
 
-_LIT(KAppTitle, "MP4 Player 9300 1.20");
+_LIT(KAppTitle, "MP4 Player 9300 1.21");
 
 // ------------------------------------------------------------------ framework entry points
 

@@ -196,6 +196,13 @@ So the player brings its own:
   position), full screen or window, H.264 mode (auto shows what it chose), direct drawing (and
   whether the last picture used it), sound.
 
+- **1.21**: a video whose decoding alone is slower than its frame time (e.g. 444×250 at 25 fps:
+  40 ms per frame) can never catch up with the sound; since 1.13 it then showed only one picture
+  a second. Now the player notices that (average decode time against the frame time) and shows
+  a picture at least every 250 ms in that case. The info screen shows the frame time and says
+  when decoding alone is too slow; it also says when the sound wasn't prepared because Space
+  was pressed during "Preparing the sound".
+
 ## Install
 
 `bin/mp4player.sis` (unsigned; Symbian 7.0s installs it after a warning). You can install it through

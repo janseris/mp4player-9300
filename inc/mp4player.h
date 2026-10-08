@@ -215,7 +215,11 @@ private:
     void ApplyFastMode();
     TBool iLastDirect;
     TBool iSoundOff;
-    void StartAudio();          // the last picture went straight to the screen (the bitmap is older)
+    void StartAudio();
+    TInt MaxNoShowMs();
+    TBool iTooSlow;             // decoding alone is slower than the frame rate
+    TBool iSlowChecked;
+    TBool iCopySkipped;         // Space pressed while the sound was being prepared          // the last picture went straight to the screen (the bitmap is older)
     };
 
 // ------------------------------------------------------------------ view

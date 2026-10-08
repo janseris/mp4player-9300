@@ -9,6 +9,7 @@ const TInt KMaxLateMs = 1500;           // further behind than this: jump to the
 const TInt KMaxRunMs = 250;             // longest decoding stretch without showing a picture
 const TInt KBehindMs = 40;              // further behind than this: decode the next frame unshown
 const TInt KMaxNoShowMs = 1000;         // but show a picture at least this often
+const TInt KMaxNoShowSlowMs = 250;      // ... or this often when decoding alone is too slow
 const TInt KAudioSyncTicksMs = 1000;
 const TInt KAudioSyncTolerance = 200;
 const TInt KAudioSyncSmall = 40;
@@ -217,7 +218,7 @@ void CPlayerEngine::Close()
     delete iAudio; iAudio = NULL;
     EndAudioCopy(EFalse);
     delete iCopyIdle; iCopyIdle = NULL;
-    iTriedCopy = iAudioFromCopy = EFalse;
+    iTriedCopy = iAudioFromCopy = iCopySkipped = EFalse;
     iAudioErr = 0;
     delete iSysVideo; iSysVideo = NULL;
     iAudioReady = iAudioPlaying = iWantPlay = iSysPrepared = iAudioFailed = iAudioRetried = EFalse;
@@ -232,6 +233,7 @@ void CPlayerEngine::Close()
     iProfDecode = iProfConv = iProfBlit = 0;
     iTickDecode = iTickConv = iTickBlit = 0;
     iProfDecoded = iProfShown = 0;
+    iTooSlow = iSlowChecked = EFalse;
     iCalFastSum = iCalMsSum = 0;
     iPlayTicks = 0;
     iCalFast0 = User::FastCounter();
@@ -816,6 +818,7 @@ void CPlayerEngine::Play()
         // the user doesn't want to wait for the sound
         EndAudioCopy(EFalse);
         iAudioFailed = ETrue;
+        iCopySkipped = ETrue;
         iWantPlay = EFalse;
         }
     if (iState == EOpening && iAudio && !iAudioReady && !iAudioFailed)
@@ -1053,6 +1056,22 @@ void CPlayerEngine::Calibrate()
     }
 
 // average milliseconds * 10 per item, from FastCounter if it's fine enough, else from ticks
+// A video whose decoding alone takes longer than its frame time can never catch up: waiting
+// for that would show one picture a second. Then show one every 250 ms and let the key frame
+// jumps keep it near the sound.
+TInt CPlayerEngine::MaxNoShowMs()
+    {
+    if (iProfDecoded < 8 || !iMp4 || iMp4->video.count <= 0) return KMaxNoShowMs;
+    if ((iProfDecoded & 15) == 0 || !iSlowChecked)
+        {
+        TInt dec10 = ProfMs10(iProfDecode, iTickDecode, iProfDecoded);
+        TInt frame10 = (TInt)((TInt64((TInt)iMp4->video.durationMs) * TInt64(10) / TInt64(iMp4->video.count)).GetTInt());
+        iTooSlow = dec10 * 100 > frame10 * 95;
+        iSlowChecked = ETrue;
+        }
+    return iTooSlow ? KMaxNoShowSlowMs : KMaxNoShowMs;
+    }
+
 TInt CPlayerEngine::ProfMs10(TUint32 aFast, TUint32 aTicks, TInt aCount)
     {
     if (aCount <= 0) return 0;
@@ -1073,6 +1092,14 @@ void CPlayerEngine::PerfText(TDes& aText)
     aText.AppendFormat(_L("Shown %d, skipped %d, errors %d. Decode %d.%d, colour %d.%d, draw %d.%d ms. "),
                        iShown, iDropped, iDecodeErrors,
                        dec / 10, dec % 10, conv / 10, conv % 10, blit / 10, blit % 10);
+    if (iMp4 && iMp4->video.count > 0)
+        {
+        // the time each frame has at this frame rate: decode + colour + draw must fit in it
+        TInt frame10 = (TInt)((TInt64((TInt)iMp4->video.durationMs) * TInt64(10) / TInt64(iMp4->video.count)).GetTInt());
+        _LIT(KTooSlow, ": decoding alone is too slow");
+        aText.AppendFormat(_L("Frame time %d.%d ms%S. "), frame10 / 10, frame10 % 10,
+                           dec > frame10 ? &KTooSlow() : &KNullDesC());
+        }
     if (iLateJumps) aText.AppendFormat(_L("Jumped %d. "), iLateJumps);
     if (iBFrames) aText.AppendFormat(_L("B-frames skipped %d. "), iBFrames);
     }
@@ -1190,7 +1217,7 @@ void CPlayerEngine::RunL()
         }
     TBool show = pic;
     if (pic && iNext < count && now - (TInt)t->timeMs[iNext] >= KBehindMs &&
-        (TInt)(((User::TickCount() - iLastShowTick) * (TUint)iTickUs) / 1000) < KMaxNoShowMs)
+        (TInt)(((User::TickCount() - iLastShowTick) * (TUint)iTickUs) / 1000) < MaxNoShowMs())
         show = EFalse;      // still behind: the next RunL goes on decoding first
     iDropped += show ? decoded - 1 : decoded;
     if (show)
@@ -1277,6 +1304,7 @@ void CPlayerEngine::InfoText(TDes& aText)
         TBuf<40> how;
         if (iAudioReady) { if (iAudioFromCopy) how.Copy(_L(" (played from a copy)")); }
         else if (iSoundOff && iMode == EModeOwn) how.Copy(_L(" (sound off: M)"));
+        else if (iCopySkipped) how.Copy(_L(" (not prepared: Space pressed)"));
         else if (iCopyIdle && iCopyIdle->IsActive()) how.Copy(_L(" (preparing)"));
         else if (iAudioErr) how.Format(_L(" (not playable, error %d)"), iAudioErr);
         else how.Copy(KNotPlayable);
