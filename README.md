@@ -215,6 +215,18 @@ So the player brings its own:
     jumps at 1.5 s; *auto* keeps in time when there is sound and is smooth without. The settings
     line shows it as `K auto=sync` / `K auto=smooth`, plus `too slow` when that's the case.
 
+- **1.23**: **decoding ahead** (H.264, key A, on by default). The decoder gets up to 16 spare
+  picture buffers (at most 3 MB): a picture it no longer needs goes into a ring of spares before
+  its memory is used again, so each output picture stays intact while that many more are
+  decoded. The player uses the time until the next picture is due to decode the following ones
+  into a queue and shows them on time, so a slow key frame no longer has to cost a skipped
+  picture. Checked on the PC: with 8 spares, using every picture 7 pictures later gives the same
+  check values on all 14 streams (and without spares it doesn't, so the test sees it). A
+  simulation with the measured decode times says the gain for 426×240 is small (the phone has
+  only ~5 ms to spare per frame to fill the queue); it helps most with uneven decode times. The
+  settings line shows `A n` (frames ahead) or `A off`. The converter now makes a key frame every
+  4 s instead of 2 s.
+
 ## Install
 
 `bin/mp4player.sis` (unsigned; Symbian 7.0s installs it after a warning). You can install it through
@@ -246,6 +258,7 @@ If the phone's speed test shows the same check value, its decoding is bit-identi
 | C | 1:1: show the **top / middle / bottom** part of a video taller than the area (switches to 1:1 first). Zoom and position are remembered (`C:\System\Data\mp4player9300.ini`) |
 | Q | H.264 **auto / best / fast**: fast skips the deblocking filter, about 30% less decoding work, a little blocky; auto uses it for videos bigger than 320×240 (remembered) |
 | K | too slow video: auto / keep in time / smooth (see 1.22; remembered) |
+| A | H.264 decode ahead on/off (see 1.23; remembered) |
 | M | sound on/off: off leaves the phone's audio decoding out, a little more time for the video (remembered) |
 | D | direct drawing on/off (see 1.14; remembered) |
 | I (Ctrl+I) | file information: frames shown and skipped, time per step, codecs |
@@ -281,7 +294,7 @@ means less work for the decoder. Bigger videos play with skipped frames.
 - `crop` fills 320×200 by cutting off the sides of 16:9 video, or the top and bottom of 4:3 video.
   The player's **fill** zoom does the same at playback time.
 
-Both run MPEG-4 Part 2 without B-frames at 15 fps and about 200 kbit/s, with a key frame every 2 s
+Both run MPEG-4 Part 2 without B-frames at 15 fps and about 200 kbit/s, with a key frame every 4 s (fewer slow-to-decode key frames; a seek lands up to 4 s early)
 so seeking stays precise. Sound is AAC mono at 22 kHz and 32 kbit/s, giving about 1.5–2 MB per
 minute. For better quality, raise `-b:v` (e.g. 300k). To make the phone's job easier, lower it, or
 change `fps=15` to `fps=12`. ffmpeg asks before overwriting an existing output file.

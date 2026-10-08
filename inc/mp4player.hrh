@@ -22,7 +22,8 @@ enum TMp4PlayerCommands
     ECmdFastH264,
     ECmdDirect,
     ECmdSound,
-    ECmdBehind
+    ECmdBehind,
+    ECmdAhead
     };
 
 #endif

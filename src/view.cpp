@@ -633,6 +633,7 @@ TKeyResponse CVideoView::OfferKeyEventL(const TKeyEvent& aKeyEvent, TEventCode a
         case 'd': case 'D': cmd = ECmdDirect; break;
         case 'm': case 'M': cmd = ECmdSound; break;
         case 'k': case 'K': cmd = ECmdBehind; break;
+        case 'a': case 'A': cmd = ECmdAhead; break;
         case 's': case 'S': cmd = ECmdStop; break;
         case 'o': case 'O': cmd = ECmdOpen; break;
         case EKeyEscape:

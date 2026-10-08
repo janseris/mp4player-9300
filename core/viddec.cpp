@@ -135,3 +135,5 @@ const char* viddec_stream_info(VidDec* d)
 
 int viddec_is_h264(VidDec* d) { return d->h264 != 0; }
 void viddec_set_fast(VidDec* d, int fast) { if (d && d->h264) h264d_set_fast(d->h264, fast); }
+void viddec_set_spare(VidDec* d, int count, int budget) { if (d && d->h264) h264d_set_spare(d->h264, count, budget); }
+int viddec_spare(VidDec* d) { return (d && d->h264) ? h264d_spare(d->h264) : 0; }

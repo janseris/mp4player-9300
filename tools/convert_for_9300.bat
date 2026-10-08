@@ -27,6 +27,6 @@ goto args
 :run
 set "VF=scale=320:200:force_original_aspect_ratio=decrease:force_divisible_by=2,fps=15"
 if /i "%MODE%"=="crop" set "VF=scale=320:200:force_original_aspect_ratio=increase,crop=320:200,fps=15"
-set "V=-c:v mpeg4 -vtag mp4v -bf 0 -g 30 -b:v 200k -maxrate 400k -bufsize 800k"
-if /i "%CODEC%"=="h264" set "V=-c:v libx264 -profile:v baseline -preset slow -bf 0 -g 30 -b:v 160k -maxrate 320k -bufsize 640k -pix_fmt yuv420p"
+set "V=-c:v mpeg4 -vtag mp4v -bf 0 -g 60 -b:v 200k -maxrate 400k -bufsize 800k"
+if /i "%CODEC%"=="h264" set "V=-c:v libx264 -profile:v baseline -preset slow -bf 0 -g 60 -b:v 160k -maxrate 320k -bufsize 640k -pix_fmt yuv420p"
 ffmpeg -i "%IN%" -map 0:v:0 -map 0:a:0? -vf "%VF%" %V% -c:a aac -ac 1 -ar 22050 -b:a 32k -movflags +faststart "%OUT%"

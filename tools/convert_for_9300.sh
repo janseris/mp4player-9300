@@ -25,9 +25,9 @@ else
   VF="scale=320:200:force_original_aspect_ratio=decrease:force_divisible_by=2,fps=15"
 fi
 if [ "$CODEC" = h264 ]; then
-  V="-c:v libx264 -profile:v baseline -preset slow -bf 0 -g 30 -b:v 160k -maxrate 320k -bufsize 640k -pix_fmt yuv420p"
+  V="-c:v libx264 -profile:v baseline -preset slow -bf 0 -g 60 -b:v 160k -maxrate 320k -bufsize 640k -pix_fmt yuv420p"
 else
-  V="-c:v mpeg4 -vtag mp4v -bf 0 -g 30 -b:v 200k -maxrate 400k -bufsize 800k"
+  V="-c:v mpeg4 -vtag mp4v -bf 0 -g 60 -b:v 200k -maxrate 400k -bufsize 800k"
 fi
 exec ffmpeg -i "$IN" -map 0:v:0 -map '0:a:0?' -vf "$VF" $V \
   -c:a aac -ac 1 -ar 22050 -b:a 32k -movflags +faststart "$OUT"

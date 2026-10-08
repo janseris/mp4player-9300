@@ -37,6 +37,18 @@ int h264d_open(H264Dec** aDec)
     return 0;
     }
 
+void h264d_set_spare(H264Dec* d, int count, int budget)
+    {
+    if (!d) return;
+    d->st->dpb->spareWanted = count < 0 ? 0 : (u32)count;
+    d->st->dpb->spareBudget = budget < 0 ? 0 : (u32)budget;
+    }
+
+int h264d_spare(H264Dec* d)
+    {
+    return d ? (int)d->st->dpb->numSpare : 0;
+    }
+
 void h264d_set_fast(H264Dec* d, int fast)
     {
     if (d) d->fast = fast ? 1 : 0;

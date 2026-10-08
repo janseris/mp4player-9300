@@ -86,6 +86,7 @@ RESOURCE MENU_PANE r_mp4player_view_menu
         MENU_ITEM { command = ECmdCropPos; txt = "1:1 position: top / middle / bottom (C)"; },
         MENU_ITEM { command = ECmdFastH264; txt = "H.264: auto / best / fast (Q)"; },
         MENU_ITEM { command = ECmdBehind; txt = "Too slow video: auto / keep in time / smooth (K)"; },
+        MENU_ITEM { command = ECmdAhead; txt = "H.264 decode ahead on / off (A)"; },
         MENU_ITEM { command = ECmdDirect; txt = "Direct drawing on / off (D)"; }
         };
     }

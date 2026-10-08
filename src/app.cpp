@@ -10,7 +10,7 @@
 #include "mp4player.h"
 #include "mp4player.hrh"
 
-_LIT(KAppTitle, "MP4 Player 9300 1.22");
+_LIT(KAppTitle, "MP4 Player 9300 1.23");
 
 // ------------------------------------------------------------------ framework entry points
 
@@ -179,6 +179,12 @@ void CMp4PlayerAppUi::HandleCommandL(TInt aCommand)
                 PlayerMessage(_L("Too slow video: auto (keep in time with sound, smooth without)"));
             SaveSettings();
             break;
+        case ECmdAhead:
+            iEngine->SetAhead(!iEngine->Ahead());
+            PlayerMessage(iEngine->Ahead() ? _L("H.264 decode ahead on (absorbs slow key frames)") :
+                          _L("H.264 decode ahead off"));
+            SaveSettings();
+            break;
         case ECmdSound:
             iEngine->SetSoundOff(!iEngine->SoundOff());
             if (iEngine->SoundOff())
@@ -331,7 +337,7 @@ _LIT(KSettingsFile, "C:\\System\\Data\\mp4player9300.ini");
 void CMp4PlayerAppUi::LoadSettings()
     {
     RFile f;
-    TBuf8<8> d;
+    TBuf8<12> d;
     iView->SetDirect(ETrue, CVideoView::EDirectUntested);
     if (f.Open(iCoeEnv->FsSession(), KSettingsFile, EFileRead) != KErrNone) return;
     if (f.Read(d) == KErrNone && d.Length() >= 2)
@@ -350,6 +356,7 @@ void CMp4PlayerAppUi::LoadSettings()
         if (d.Length() >= 7) iEngine->SetSoundOff(d[6] != 0);      // byte 6: sound off
         if (d.Length() >= 8 && d[7] <= CPlayerEngine::EBehindSmooth)   // byte 7: too slow video
             iEngine->SetBehind((CPlayerEngine::TBehind)d[7]);
+        if (d.Length() >= 9) iEngine->SetAhead(d[8] == 0);             // byte 8: decode ahead off
         }
     f.Close();
     }
@@ -358,7 +365,7 @@ void CMp4PlayerAppUi::SaveSettings()
     {
     RFs& fs = iCoeEnv->FsSession();
     RFile f;
-    TBuf8<8> d;
+    TBuf8<12> d;
     d.Append((TUint8)iView->Zoom());
     d.Append((TUint8)iView->CropPos());
     d.Append((TUint8)(iEngine->FastMode() == CPlayerEngine::EFastOn ? 1 : 0));
@@ -367,6 +374,7 @@ void CMp4PlayerAppUi::SaveSettings()
     d.Append((TUint8)(iView->DirectEnabled() ? 0 : 1));
     d.Append((TUint8)(iEngine->SoundOff() ? 1 : 0));
     d.Append((TUint8)iEngine->Behind());
+    d.Append((TUint8)(iEngine->Ahead() ? 0 : 1));
     fs.MkDirAll(KSettingsFile);     // the folder usually exists already
     if (f.Replace(fs, KSettingsFile, EFileWrite) != KErrNone) return;
     f.Write(d);
@@ -406,7 +414,9 @@ void CMp4PlayerAppUi::SettingsText(TDes& aText)
         case CPlayerEngine::EBehindSmooth: aText.Append(_L(" | K smooth")); break;
         default: aText.Append(iEngine->SyncNow() ? _L(" | K auto=sync") : _L(" | K auto=smooth")); break;
         }
-    aText.Append(iEngine->TooSlow() ? _L(", too slow] ") : _L("] "));
+    if (iEngine->TooSlow()) aText.Append(_L(", too slow"));
+    if (iEngine->QueueCapacity()) aText.AppendFormat(iEngine->Ahead() ? _L(" | A %d") : _L(" | A off"), iEngine->QueueCapacity());
+    aText.Append(_L("] "));
     }
 
 void CMp4PlayerAppUi::ShowZoomMessage()
