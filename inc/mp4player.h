@@ -354,6 +354,7 @@ public:
     void ShowFileInfoL();
     void AnalyzeFileL();
     TBool WriteTextFile(const TDesC& aName, const TDesC& aText);
+    static TInt AnalysisPageLength(const TDesC& aText, TInt aPos);
     static TInt StartupOpen(TAny* aSelf);
     CVideoView* iView;
     CPlayerEngine* iEngine;

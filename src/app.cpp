@@ -10,7 +10,7 @@
 #include "mp4player.h"
 #include "mp4player.hrh"
 
-_LIT(KAppTitle, "MP4 Player 9300 1.25");
+_LIT(KAppTitle, "MP4 Player 9300 1.26");
 
 // ------------------------------------------------------------------ framework entry points
 
@@ -369,31 +369,14 @@ void CMp4PlayerAppUi::AnalyzeFileL()
     else if (ptr.Length() + 20 <= ptr.MaxLength()) ptr.Append(_L("(could not save)"));
     PlayerMessage(_L("Analysis done. Open a video to play it."));
 
-    // show in pages of whole lines
-    const TInt KPage = 380;
+    // show in pages: the info note shows only about 250 characters, so pages end at a line
+    // end (or a space) before 200
     TInt pages = 0, pos = 0;
-    while (pos < ptr.Length())
-        {
-        TInt len = ptr.Length() - pos;
-        if (len > KPage)
-            {
-            len = KPage;
-            TInt cut = ptr.Mid(pos, KPage).LocateReverse('\n');
-            if (cut > 40) len = cut + 1;
-            }
-        pages++;
-        pos += len;
-        }
+    while (pos < ptr.Length()) { pos += AnalysisPageLength(ptr, pos); pages++; }
     pos = 0;
     for (TInt page = 1; page <= pages && pos < ptr.Length(); page++)
         {
-        TInt len = ptr.Length() - pos;
-        if (len > KPage)
-            {
-            len = KPage;
-            TInt cut = ptr.Mid(pos, KPage).LocateReverse('\n');
-            if (cut > 40) len = cut + 1;
-            }
+        TInt len = AnalysisPageLength(ptr, pos);
         HBufC* part = ptr.Mid(pos, len).AllocLC();
         TPtr pp = part->Des();
         for (TInt i = 0; i < pp.Length(); i++) if (pp[i] == '\n') pp[i] = ' ';
@@ -404,6 +387,19 @@ void CMp4PlayerAppUi::AnalyzeFileL()
         pos += len;
         }
     CleanupStack::PopAndDestroy(text);
+    }
+
+TInt CMp4PlayerAppUi::AnalysisPageLength(const TDesC& aText, TInt aPos)
+    {
+    const TInt KPage = 200;
+    TInt len = aText.Length() - aPos;
+    if (len <= KPage) return len;
+    TPtrC part(aText.Mid(aPos, KPage));
+    TInt cut = part.LocateReverse('\n');
+    if (cut >= 60) return cut + 1;
+    cut = part.LocateReverse(' ');
+    if (cut >= 60) return cut + 1;
+    return KPage;
     }
 
 // ASCII text file with CRLF line ends

@@ -637,6 +637,20 @@ int mp4_audio_copy_begin(Mp4AudioCopy** aCopy, const Mp4File* f, const MpAlloc* 
         !find_box(minf, MP4_FOURCC('s','t','b','l'), &stbl) ||
         !find_box(stbl, MP4_FOURCC('s','t','s','c'), &stsc) || stsc.len < 8)
         { mp4_audio_copy_end(c); return MP4_ERR_FORMAT; }
+    /* AAC whose sample entry says 2 channels while the AudioSpecificConfig says mono (MP4Box
+       writes 2 always): give the phone's audio player the real channel count */
+    {
+    Span stsd;
+    if (f->audio.fourcc == MP4_FOURCC('m','p','4','a') && f->audio.ascLen >= 2 &&
+        find_box(stbl, MP4_FOURCC('s','t','s','d'), &stsd) && stsd.len >= 8 + 36 &&
+        rd32(stsd.p + 12) == MP4_FOURCC('m','p','4','a'))
+        {
+        u8* ch = (u8*)stsd.p + 8 + 24;
+        int cfg = (f->audio.asc[1] >> 3) & 15;
+        int aot = f->audio.asc[0] >> 3, freq = ((f->audio.asc[0] & 7) << 1) | (f->audio.asc[1] >> 7);
+        if (aot != 31 && freq != 15 && (cfg == 1 || cfg == 2) && (int)rd16(ch) != cfg) { ch[0] = 0; ch[1] = (u8)cfg; }
+        }
+    }
     if (find_box(stbl, MP4_FOURCC('s','t','s','z'), &stsz) && stsz.len >= 12)
         {
         fixed = rd32(stsz.p + 4);

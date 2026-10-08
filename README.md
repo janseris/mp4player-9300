@@ -233,6 +233,19 @@ So the player brings its own:
   frames twice (best and fast) and compares the time with the frame time. The report is shown
   in pages and saved next to the video as `<name>_analysis.txt` (on C:\ if that fails), so the
   parameters can be reported and a similar test clip made on the PC.
+- **1.25 on the phone**: the 444x250 internet video turned out to be x264 *ultrafast*: H.264
+  Baseline level 3.0, 25 fps, 150 kbit/s, 1 reference frame, CAVLC, one slice per frame, the
+  deblocking filter switched off in the stream (so best = fast), a key frame every ~12 frames,
+  average QP 29; AAC-LC mono 22050 Hz whose sample entry says 2 channels. Verdict: about 14 of
+  25 fps. The info note shows only ~250 characters, so some lines were cut off.
+- **1.26**: analysis pages of at most 200 characters. The audio-only copy for H.264 files gets
+  the channel count from the AAC config when the sample entry says otherwise (MP4Box writes 2
+  for every AAC track; possibly why that video's sound didn't play). `tools/make_sim444.sh`
+  makes `samples/sim444_like_original.mp4` (sample entry says 2 channels, like the original) and
+  `samples/sim444_mono_header.mp4` (says 1): 60 s, same encoder settings, mostly still picture.
+  In the ARM emulator the first 60 frames take 1.2 M instructions per frame (about 25 ms by the
+  earlier 20 ns/instruction): if the phone needs much more, memory traffic, not instructions, is
+  what costs at this size.
 
 ## Install
 
