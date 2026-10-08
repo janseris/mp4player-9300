@@ -4,6 +4,8 @@
  * run.py ktest. */
 #include "../../core/h264/basetype.h"
 #include "../../core/h264/h264bsd_arm.h"
+#include "../../core/h264/h264bsd_stream.h"
+#include "../../core/h264/h264bsd_cavlc.h"
 
 #ifndef H264_ARM_ASM
 #error ktest is for the ARM build
@@ -320,6 +322,120 @@ u32 ktest_write(u8 *bufA, u8 *bufB, u32 seed, u32 iters)
             pa[(4 + y) * LW + 4 + x] = (u8)(v < 0 ? 0 : v > 255 ? 255 : v);
         }
         for (i = 0; i < 4096; i++) if (pa[i] != pb[i]) { bad++; break; }
+    }
+    return bad;
+}
+
+/* position j against the 2D 6-tap formula */
+u32 ktest_mid(u8 *bufA, u8 *bufB, u32 seed, u32 iters)
+{
+    u32 it, i, x, y, r, bad = 0;
+    static i32 table[21 * 16];
+    for (it = 0; it < iters; it++)
+    {
+        u32 w = 4 << (rnd(&seed) % 3), h = 4 << (rnd(&seed) % 3), kind = rnd(&seed) % 3;
+        u32 stride = 24 + rnd(&seed) % 40, mode = rnd(&seed) % 3;
+        u8 *src = bufA + 4096, *s0;
+        for (i = 0; i < 4096; i++)
+        {
+            u32 v = rnd(&seed) & 255;
+            if (kind == 1) v = (v & 1) ? 255 : 0;
+            if (kind == 2) v = 100 + (v & 15);
+            src[i] = (u8)v;
+        }
+        for (i = 0; i < 256; i++) bufA[i] = bufB[i] = (u8)rnd(&seed);
+        s0 = src + rnd(&seed) % 8;
+        h264arm_mid(s0, bufB, (i32)stride, w | h << 8 | mode << 16, h264bsdClip + 512, table);
+        for (y = 0; y < h; y++)
+            for (x = 0; x < w; x++)
+            {
+                i32 H[6], v;
+                for (r = 0; r < 6; r++)
+                {
+                    const u8 *p = s0 + (y + r) * stride + x;
+                    H[r] = p[0] - 5 * p[1] + 20 * p[2] + 20 * p[3] - 5 * p[4] + p[5];
+                }
+                v = (H[0] - 5 * H[1] + 20 * H[2] + 20 * H[3] - 5 * H[4] + H[5] + 512) >> 10;
+                v = v < 0 ? 0 : v > 255 ? 255 : v;
+                if (mode)
+                {
+                    i32 g = (H[1 + mode] + 16) >> 5;
+                    g = g < 0 ? 0 : g > 255 ? 255 : g;
+                    v = (v + g + 1) >> 1;
+                }
+                bufA[y * 16 + x] = (u8)v;
+            }
+        for (i = 0; i < 256; i++) if (bufA[i] != bufB[i]) { bad++; break; }
+    }
+    return bad;
+}
+
+/* CAVLC block decoder: assembler against the C original on random streams, several blocks in a
+ * row sharing the bit cache (as DecodeResidual does) */
+u32 ktest_cavlc(u8 *bufA, u8 *bufB, u32 seed, u32 iters)
+{
+    u32 it, i, k, bad = 0;
+    static const i32 ncs[8] = { 0, 1, 2, 3, 5, 9, 16, -1 };
+    for (it = 0; it < iters; it++)
+    {
+        strmData_t sa, sb;
+        u32 ca[2], cb[2], len = 8 + rnd(&seed) % 120, kind = rnd(&seed) % 3;
+        i32 la[16], lb[16];
+        for (i = 0; i < len; i++)
+        {
+            u32 v = rnd(&seed) & 255;
+            if (kind == 1) v &= rnd(&seed) & 255;            /* more zero bits */
+            if (kind == 2) v |= rnd(&seed) & 255;            /* more one bits */
+            bufA[i] = (u8)v;
+        }
+        for (i = len; i < len + 8; i++) bufA[i] = 0;
+        sa.pStrmBuffStart = sa.pStrmCurrPos = bufA;
+        sa.bitPosInWord = 0; sa.strmBuffSize = len; sa.strmBuffReadBits = 0;
+        k = rnd(&seed) % 8;                                   /* start at a random bit */
+        h264bsdFlushBits(&sa, k);
+        sb = sa;
+        ca[0] = cb[0] = h264bsdShowBits32(&sa);
+        ca[1] = cb[1] = 32;
+        for (k = 0; k < 30; k++)
+        {
+            i32 nc = ncs[rnd(&seed) % 8];
+            u32 max = nc == -1 ? 4 : (rnd(&seed) & 1 ? 16 : 15), ra, rb;
+            for (i = 0; i < 16; i++) la[i] = lb[i] = 0;
+            ra = h264bsdDecodeResidualBlockCavlcC(&sa, ca, la, nc, max);
+            rb = h264bsdDecodeResidualBlockCavlc(&sb, cb, lb, nc, max);
+            if (ra != rb) { bad++; break; }
+            if ((ra & 0xF) != 0) break;                       /* error: both stopped */
+            if (ca[0] != cb[0] || ca[1] != cb[1] || sa.strmBuffReadBits != sb.strmBuffReadBits ||
+                sa.pStrmCurrPos != sb.pStrmCurrPos) { bad++; break; }
+            for (i = 0; i < 16; i++) if (la[i] != lb[i]) { bad++; break; }
+            if (i < 16) break;
+        }
+    }
+    return bad;
+}
+
+/* bit reader: assembler against C, random flush lengths up to and past the end */
+u32 ktest_bits(u8 *bufA, u8 *bufB, u32 seed, u32 iters)
+{
+    u32 it, i, k, bad = 0;
+    for (it = 0; it < iters; it++)
+    {
+        strmData_t sa, sb;
+        u32 len = 1 + rnd(&seed) % 40;
+        for (i = 0; i < len + 8; i++) bufA[i] = (u8)rnd(&seed);
+        sa.pStrmBuffStart = sa.pStrmCurrPos = bufA;
+        sa.bitPosInWord = 0; sa.strmBuffSize = len; sa.strmBuffReadBits = 0;
+        sb = sa;
+        for (k = 0; k < 40; k++)
+        {
+            u32 n = rnd(&seed) % 33, ra, rb;
+            if (h264bsdShowBits32C(&sa) != h264bsdShowBits32(&sb)) { bad++; break; }
+            ra = h264bsdFlushBitsC(&sa, n);
+            rb = h264bsdFlushBits(&sb, n);
+            if (ra != rb || sa.strmBuffReadBits != sb.strmBuffReadBits || sa.bitPosInWord != sb.bitPosInWord ||
+                sa.pStrmCurrPos != sb.pStrmCurrPos) { bad++; break; }
+            if (ra) break;
+        }
     }
     return bad;
 }

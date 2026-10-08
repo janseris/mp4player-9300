@@ -1308,6 +1308,12 @@ void h264bsdInterpolateMidHalf(
 
     ref += (u32)y0 * width + (u32)x0;
 
+#ifdef H264_ARM_ASM
+    /* MP4 Player 9300: ARM assembler version */
+    h264arm_mid(ref, mb, (i32)width, partWidth | partHeight << 8, clp, table);
+    return;
+#endif
+
     b1 = table;
     ptrJ = ref + 5;
 
@@ -1494,6 +1500,13 @@ void h264bsdInterpolateMidVerQuarter(
     }
 
     ref += (u32)y0 * width + (u32)x0;
+
+#ifdef H264_ARM_ASM
+    /* MP4 Player 9300: ARM assembler version: j averaged with the horizontal half-pel of
+     * line 2 (f) or 3 (q) */
+    h264arm_mid(ref, mb, (i32)width, partWidth | partHeight << 8 | (1 + verOffset) << 16, clp, table);
+    return;
+#endif
 
     b1 = table;
     ptrJ = ref + 5;
@@ -1699,6 +1712,15 @@ void h264bsdInterpolateMidHorQuarter(
     }
 
     ref += (u32)y0 * width + (u32)x0;
+
+#ifdef H264_ARM_ASM
+    /* MP4 Player 9300: ARM assembler version: j (the same in either filter order), then
+     * averaged with the vertical half-pel of column 2 (i) or 3 (k) */
+    h264arm_mid(ref, mb, (i32)width, partWidth | partHeight << 8, clp, table);
+    h264arm_ver6(ref + 2 + horOffset, mb, (i32)width,
+        partWidth | partHeight << 8 | 3 << 16, h264arm_clip6tbl + 160);
+    return;
+#endif
 
     h1 = table + tableWidth;
     ptrC = ref + width;

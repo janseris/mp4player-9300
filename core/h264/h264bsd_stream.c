@@ -37,6 +37,14 @@
 
 #include "h264bsd_util.h"
 #include "h264bsd_stream.h"
+#include "h264bsd_arm.h"
+
+#ifdef H264_ARM_ASM
+/* MP4 Player 9300: ARM assembler versions in h264bsd_arm.c; the C ones stay under these names
+ * (the assembler ShowBits32 falls back to its C version near the end of the stream) */
+#define h264bsdShowBits32 h264bsdShowBits32C
+#define h264bsdFlushBits h264bsdFlushBitsC
+#endif
 
 /*------------------------------------------------------------------------------
     2. External compiler flags

@@ -38,6 +38,17 @@
 
 #include "h264bsd_cavlc.h"
 #include "h264bsd_util.h"
+#include "h264bsd_arm.h"
+
+#ifdef H264_ARM_ASM
+/* MP4 Player 9300: the block decoder is in ARM assembler (h264bsd_arm.c); this C version stays
+ * as the reference for the emulator tests, and the table decoders below are called from the
+ * assembler */
+#define h264bsdDecodeResidualBlockCavlc h264bsdDecodeResidualBlockCavlcC
+#define CAVLC_STATIC
+#else
+#define CAVLC_STATIC static
+#endif
 
 /*------------------------------------------------------------------------------
     2. External compiler flags
@@ -369,13 +380,13 @@ static const u8 runBefore_1[2] = {0x11,0x01};
     4. Local function prototypes
 ------------------------------------------------------------------------------*/
 
-static u32 DecodeCoeffToken(u32 bits, u32 nc);
+CAVLC_STATIC u32 DecodeCoeffToken(u32 bits, u32 nc);
 
-static u32 DecodeLevelPrefix(u32 bits);
+CAVLC_STATIC u32 DecodeLevelPrefix(u32 bits);
 
-static u32 DecodeTotalZeros(u32 bits, u32 totalCoeff, u32 isChromaDC);
+CAVLC_STATIC u32 DecodeTotalZeros(u32 bits, u32 totalCoeff, u32 isChromaDC);
 
-static u32 DecodeRunBefore(u32 bits,u32 zerosLeft);
+CAVLC_STATIC u32 DecodeRunBefore(u32 bits,u32 zerosLeft);
 
 /*------------------------------------------------------------------------------
 
@@ -748,6 +759,7 @@ u32 DecodeRunBefore(u32 bits, u32 zerosLeft)
 
 u32 h264bsdDecodeResidualBlockCavlc(
   strmData_t *pStrmData,
+  u32 *pCache,
   i32 *coeffLevel,
   i32 nc,
   u32 maxNumCoeff)
@@ -773,7 +785,11 @@ u32 h264bsdDecodeResidualBlockCavlc(
 
     /* assume that coeffLevel array has been "cleaned" by caller */
 
-    BUFFER_INIT(bufferValue, bufferBits);
+    /* MP4 Player 9300: the bit cache is kept by the caller across all blocks of a macroblock
+     * (pCache[0] the 32 bits from the stream position, pCache[1] how many of them are unused),
+     * which saves reading and flushing the stream for every block */
+    bufferValue = pCache[0];
+    bufferBits = pCache[1];
 
     /*lint -e774 disable lint warning on always false comparison */
     BUFFER_SHOW(bufferValue, bufferBits, bit, 16);
@@ -909,8 +925,8 @@ u32 h264bsdDecodeResidualBlockCavlc(
     else
         levelSuffix = 0;
 
-    if (h264bsdFlushBits(pStrmData, 32-bufferBits) != HANTRO_OK)
-        return(HANTRO_NOK);
+    pCache[0] = bufferValue;
+    pCache[1] = bufferBits;
 
     return((totalCoeff << 4) | (levelSuffix << 16));
 }

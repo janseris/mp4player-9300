@@ -52,6 +52,14 @@ u32 h264arm_idct4x4(i32 *data, const i32 *scale);
 void h264arm_write_mb(u8 *lum, u8 *cb, u8 *cr, const u8 *data, u32 width);
 /* dst = clip(dst + res), 4x4, dst word aligned; clip = h264bsdClip + 512 */
 void h264arm_add4x4(u8 *dst, const i32 *res, u32 stride, const u8 *clip);
+/* luma position j (6-tap in both directions) of a w x h block (w, h = 4, 8, 16) into the
+ * 16-wide prediction buffer; src 2 pixels left of and 2 lines above the block; whm = w | h << 8 |
+ * mode << 16 (0: j; 1, 2: averaged with the horizontal half-pel of line 2 (f) or 3 (q));
+ * clip = h264bsdClip + 512; table: (h + 5) * w words of scratch space */
+void h264arm_mid(const u8 *src, u8 *dst, i32 srcStride, u32 whm, const u8 *clip, i32 *table);
+
+/* CAVLC: h264bsdDecodeResidualBlockCavlc itself is the assembler version (same interface, see
+ * h264bsd_cavlc.h, where the C original's name for tests is declared) */
 
 #ifdef __cplusplus
 }

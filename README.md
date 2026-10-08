@@ -179,6 +179,16 @@ So the player brings its own:
   AAC decoding, no sound copy for H.264), the video runs on its own clock. Switching it back on
   during playback opens the sound and starts it at the current position.
 
+- **1.18 on the phone**: sound off made no difference (65.1 vs 64.9 ms decode in a long session;
+  after a restart 51.7 ms, the same as the speed test's 51.0). 426×240 fast: direct drawing on
+  showed 187 of 300 frames, off 136.
+- **1.19**: more of the H.264 decoder in assembler or reworked, all bit-exact (14 streams, plus
+  kernel tests against the C code on random data): the CAVLC residual block decoder (with the
+  bit cache kept across the blocks of a macroblock), the bit reader, luma position j with its
+  quarter-pel neighbours f/q in one pass, and a faster scan for emulation prevention bytes.
+  Emulator instructions per frame (150 frames): 426×240 fast 2.23 M (was 2.33 M), 320×180
+  1.85 M (was 1.90 M): about 4–5% less decoding time.
+
 ## Install
 
 `bin/mp4player.sis` (unsigned; Symbian 7.0s installs it after a warning). You can install it through

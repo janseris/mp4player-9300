@@ -721,6 +721,7 @@ u32 DecodeResidual(strmData_t *pStrmData, residual_t *pResidual,
     u32 blockIndex;
     u32 is16x16;
     i32 (*level)[16];
+    u32 cache[2];
 
 /* Code */
 
@@ -729,12 +730,16 @@ u32 DecodeResidual(strmData_t *pStrmData, residual_t *pResidual,
 
     level = pResidual->level;
 
+    /* bit cache shared by all blocks (see h264bsdDecodeResidualBlockCavlc) */
+    cache[0] = h264bsdShowBits32(pStrmData);
+    cache[1] = 32;
+
     /* luma DC is at index 24 */
     if (h264bsdMbPartPredMode(mbType) == PRED_MODE_INTRA16x16)
     {
         nc = (i32)DetermineNc(pMb, 0, pResidual->totalCoeff);
         ZERO_BLOCK(level[24]);
-        tmp = h264bsdDecodeResidualBlockCavlc(pStrmData, level[24], nc, 16);
+        tmp = h264bsdDecodeResidualBlockCavlc(pStrmData, cache, level[24], nc, 16);
         if ((tmp & 0xF) != HANTRO_OK)
             return(tmp);
         pResidual->totalCoeff[24] = (tmp >> 4) & 0xFF;
@@ -756,13 +761,13 @@ u32 DecodeResidual(strmData_t *pStrmData, residual_t *pResidual,
                 ZERO_BLOCK(level[blockIndex]);
                 if (is16x16)
                 {
-                    tmp = h264bsdDecodeResidualBlockCavlc(pStrmData,
+                    tmp = h264bsdDecodeResidualBlockCavlc(pStrmData, cache,
                         level[blockIndex] + 1, nc, 15);
                     pResidual->coeffMap[blockIndex] = tmp >> 15;
                 }
                 else
                 {
-                    tmp = h264bsdDecodeResidualBlockCavlc(pStrmData,
+                    tmp = h264bsdDecodeResidualBlockCavlc(pStrmData, cache,
                         level[blockIndex], nc, 16);
                     pResidual->coeffMap[blockIndex] = tmp >> 16;
                 }
@@ -786,11 +791,11 @@ u32 DecodeResidual(strmData_t *pStrmData, residual_t *pResidual,
     blockCoded = codedBlockPattern & 0x3;
     if (blockCoded)
     {
-        tmp = h264bsdDecodeResidualBlockCavlc(pStrmData, level[25], -1, 4);
+        tmp = h264bsdDecodeResidualBlockCavlc(pStrmData, cache, level[25], -1, 4);
         if ((tmp & 0xF) != HANTRO_OK)
             return(tmp);
         pResidual->totalCoeff[25] = (tmp >> 4) & 0xFF;
-        tmp = h264bsdDecodeResidualBlockCavlc(pStrmData, level[25]+4, -1, 4);
+        tmp = h264bsdDecodeResidualBlockCavlc(pStrmData, cache, level[25]+4, -1, 4);
         if ((tmp & 0xF) != HANTRO_OK)
             return(tmp);
         pResidual->totalCoeff[26] = (tmp >> 4) & 0xFF;
@@ -810,7 +815,7 @@ u32 DecodeResidual(strmData_t *pStrmData, residual_t *pResidual,
         {
             nc = (i32)DetermineNc(pMb, blockIndex, pResidual->totalCoeff);
             ZERO_BLOCK(level[blockIndex]);
-            tmp = h264bsdDecodeResidualBlockCavlc(pStrmData,
+            tmp = h264bsdDecodeResidualBlockCavlc(pStrmData, cache,
                 level[blockIndex] + 1, nc, 15);
             if ((tmp & 0xF) != HANTRO_OK)
                 return(tmp);
@@ -819,6 +824,8 @@ u32 DecodeResidual(strmData_t *pStrmData, residual_t *pResidual,
         }
     }
 
+    if (h264bsdFlushBits(pStrmData, 32 - cache[1]) != HANTRO_OK)
+        return(HANTRO_NOK);
     return(HANTRO_OK);
 
 }

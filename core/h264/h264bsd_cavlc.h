@@ -51,6 +51,15 @@
 
 u32 h264bsdDecodeResidualBlockCavlc(
   strmData_t *pStrmData,
+  u32 *pCache,
+  i32 *coeffLevel,
+  i32 nc,
+  u32 maxNumCoeff);
+
+/* MP4 Player 9300: with the ARM assembler version, the C original under another name (tests) */
+u32 h264bsdDecodeResidualBlockCavlcC(
+  strmData_t *pStrmData,
+  u32 *pCache,
   i32 *coeffLevel,
   i32 nc,
   u32 maxNumCoeff);

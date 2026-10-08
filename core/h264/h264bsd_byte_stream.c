@@ -196,6 +196,25 @@ u32 h264bsdExtractNalUnit(u8 *pByteStream, u32 len, strmData_t *pStrmData,
         tmp = pStrmData->strmBuffSize;
         readPtr = writePtr = pStrmData->pStrmBuffStart;
         zeroCount = 0;
+        /* MP4 Player 9300: up to the first two zero bytes in a row nothing changes (no
+         * emulation prevention byte, no forbidden sequence): skip there two bytes at a time */
+        if (tmp > 1)
+        {
+            u8 *end = readPtr + tmp - 1;
+            while (readPtr < end)
+            {
+                if (readPtr[1])
+                    readPtr += 2;
+                else if (readPtr[0])
+                    readPtr++;
+                else
+                    break;
+            }
+            if (readPtr > end)
+                readPtr = end;
+            tmp -= (u32)(readPtr - writePtr);
+            writePtr = readPtr;
+        }
         for (i = tmp; i--;)
         {
             if ((zeroCount == 2) && (*readPtr == 0x03))

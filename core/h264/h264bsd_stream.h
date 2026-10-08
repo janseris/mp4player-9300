@@ -64,5 +64,9 @@ u32 h264bsdFlushBits(strmData_t *pStrmData, u32 numBits);
 
 u32 h264bsdIsByteAligned(strmData_t *);
 
+/* MP4 Player 9300: the C versions when the ARM assembler ones are used */
+u32 h264bsdShowBits32C(strmData_t *pStrmData);
+u32 h264bsdFlushBitsC(strmData_t *pStrmData, u32 numBits);
+
 #endif /* #ifdef H264SWDEC_STREAM_H */
 
