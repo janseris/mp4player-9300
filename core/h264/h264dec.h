@@ -45,12 +45,6 @@ int  h264d_decode(H264Dec* d, unsigned char* buf, int len, H264Pic* pic);
    drift a little until the next key frame */
 void h264d_set_fast(H264Dec* d, int fast);
 
-/* spare picture buffers (before the first picture): every picture this returns then stays
-   intact while h264d_spare() more pictures are decoded (so the caller can decode ahead and
-   show it later). budget = most bytes they may use. */
-void h264d_set_spare(H264Dec* d, int count, int budget);
-int  h264d_spare(H264Dec* d);
-
 /* after a seek: forget reference pictures */
 void h264d_flush(H264Dec* d);
 

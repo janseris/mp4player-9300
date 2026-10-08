@@ -67,8 +67,6 @@ typedef struct {
     u32 isIdr;
 } dpbPicture_t;
 
-#define DPB_MAX_SPARE 16
-
 /* structure to represent display image output from the buffer */
 typedef struct {
     u8 *data;
@@ -95,15 +93,6 @@ typedef struct {
     u32 lastContainsMmco5;
     u32 noReordering;
     u32 flushed;
-    /* MP4 Player 9300: spare picture buffers. A picture the decoder no longer needs goes into
-     * a ring of spares before its memory is decoded into again, so every output picture stays
-     * intact for numSpare more decoded pictures (the player shows them a little later). */
-    u32 spareWanted;        /* set by the user of the decoder; kept over re-initialisation */
-    u32 spareBudget;        /* bytes the spares may use */
-    u32 numSpare;
-    u32 spareNext;
-    u8 *spareData[DPB_MAX_SPARE];
-    u8 *spareAlloc[DPB_MAX_SPARE];
 } dpbStorage_t;
 
 /*------------------------------------------------------------------------------

@@ -44,10 +44,6 @@ int main(int argc, char** argv)
     int haveLast = 0;
     u32 hash = 2166136261u;
     int hashN = getenv("CHECKN") ? atoi(getenv("CHECKN")) : 150;   /* frames in the check value */
-    int qlen = getenv("QUEUE") ? atoi(getenv("QUEUE")) : 0, qn = 0;
-    if (qlen > 32) qlen = 32;
-    M4vPicture qpic[33]; int qidx[33];
-    if (getenv("SPARE")) viddec_set_spare(d, atoi(getenv("SPARE")), 64 << 20);
     for (int i = 0; i < mf->video.count; i++)
         {
         int sz = mf->video.size[i];
@@ -58,23 +54,7 @@ int main(int argc, char** argv)
         if (r < 0) { errs++; fprintf(stderr, "frame %d: err %d %s\n", i, r, viddec_error_text(d)); continue; }
         if (r == M4V_FRAME_SKIPPED || r == M4V_NOFRAME) continue;
         last = pic; haveLast = 1;
-        /* QUEUE=q: use each picture only q pictures later (tests that the decoder's spare
-           buffers keep it intact, as the player's decode-ahead queue needs) */
-        qpic[qn] = pic; qidx[qn] = i; qn++;
-        if (qn <= qlen) continue;
-        pic = qpic[0]; int pi = qidx[0];
-        for (int k = 1; k < qn; k++) { qpic[k - 1] = qpic[k]; qidx[k - 1] = qidx[k]; }
-        qn--;
-        if (pi < hashN) hash = m4v_picture_hash(&pic, hash);
-        for (int y = 0; y < pic.height; y++) fwrite(pic.y + y * pic.ystride, 1, pic.width, out);
-        for (int y = 0; y < (pic.height + 1) / 2; y++) fwrite(pic.u + y * pic.cstride, 1, (pic.width + 1) / 2, out);
-        for (int y = 0; y < (pic.height + 1) / 2; y++) fwrite(pic.v + y * pic.cstride, 1, (pic.width + 1) / 2, out);
-        frames++;
-        }
-    for (int k = 0; k < qn; k++)
-        {
-        M4vPicture pic = qpic[k];
-        if (qidx[k] < hashN) hash = m4v_picture_hash(&pic, hash);
+        if (i < hashN) hash = m4v_picture_hash(&pic, hash);
         for (int y = 0; y < pic.height; y++) fwrite(pic.y + y * pic.ystride, 1, pic.width, out);
         for (int y = 0; y < (pic.height + 1) / 2; y++) fwrite(pic.u + y * pic.cstride, 1, (pic.width + 1) / 2, out);
         for (int y = 0; y < (pic.height + 1) / 2; y++) fwrite(pic.v + y * pic.cstride, 1, (pic.width + 1) / 2, out);

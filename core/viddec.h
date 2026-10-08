@@ -25,8 +25,5 @@ const char* viddec_stream_info(VidDec* d);
 int  viddec_is_h264(VidDec* d);
 /* H.264 only: 1 = skip the deblocking filter (faster) */
 void viddec_set_fast(VidDec* d, int fast);
-/* H.264 only: see h264d_set_spare; viddec_spare() = how many pictures may be decoded ahead + 1 */
-void viddec_set_spare(VidDec* d, int count, int budget);
-int  viddec_spare(VidDec* d);
 
 #endif

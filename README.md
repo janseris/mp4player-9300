@@ -215,17 +215,15 @@ So the player brings its own:
     jumps at 1.5 s; *auto* keeps in time when there is sound and is smooth without. The settings
     line shows it as `K auto=sync` / `K auto=smooth`, plus `too slow` when that's the case.
 
-- **1.23**: **decoding ahead** (H.264, key A, on by default). The decoder gets up to 16 spare
-  picture buffers (at most 3 MB): a picture it no longer needs goes into a ring of spares before
-  its memory is used again, so each output picture stays intact while that many more are
-  decoded. The player uses the time until the next picture is due to decode the following ones
-  into a queue and shows them on time, so a slow key frame no longer has to cost a skipped
-  picture. Checked on the PC: with 8 spares, using every picture 7 pictures later gives the same
-  check values on all 14 streams (and without spares it doesn't, so the test sees it). A
-  simulation with the measured decode times says the gain for 426×240 is small (the phone has
-  only ~5 ms to spare per frame to fill the queue); it helps most with uneven decode times. The
-  settings line shows `A n` (frames ahead) or `A off`. The converter now makes a key frame every
-  4 s instead of 2 s.
+- **1.23**: tried **decoding ahead** for H.264: up to 16 spare picture buffers in the decoder (a
+  picture it no longer needed went into a ring of spares before its memory was reused), and
+  the player decoded the next pictures into a queue in the time before the next one was due.
+  On the PC, using every picture 7 pictures later gave the same check values on all 14 streams.
+  The converter now makes a key frame every 4 s instead of 2 s.
+- **1.23 on the phone**: 426×240 fast, 1:1, direct drawing, no sound: 274 of 300 shown with
+  decoding ahead, 271 without (with sound, without it: 268). Too little for 3 MB and a more
+  complicated playback loop (the phone has only ~5 ms per frame to fill the queue).
+- **1.24**: decoding ahead removed again (as in 1.22, plus the converter's 4 s key frames).
 
 ## Install
 
@@ -258,7 +256,6 @@ If the phone's speed test shows the same check value, its decoding is bit-identi
 | C | 1:1: show the **top / middle / bottom** part of a video taller than the area (switches to 1:1 first). Zoom and position are remembered (`C:\System\Data\mp4player9300.ini`) |
 | Q | H.264 **auto / best / fast**: fast skips the deblocking filter, about 30% less decoding work, a little blocky; auto uses it for videos bigger than 320×240 (remembered) |
 | K | too slow video: auto / keep in time / smooth (see 1.22; remembered) |
-| A | H.264 decode ahead on/off (see 1.23; remembered) |
 | M | sound on/off: off leaves the phone's audio decoding out, a little more time for the video (remembered) |
 | D | direct drawing on/off (see 1.14; remembered) |
 | I (Ctrl+I) | file information: frames shown and skipped, time per step, codecs |

@@ -259,8 +259,6 @@ void CPlayerEngine::Close()
     iTickDecode = iTickConv = iTickBlit = 0;
     iProfDecoded = iProfShown = 0;
     iTooSlow = iSlowChecked = EFalse;
-    iQCount = iQHead = iQCap = 0;
-    iAhead = EFalse;
     iCalFastSum = iCalMsSum = 0;
     iPlayTicks = 0;
     iCalFast0 = User::FastCounter();
@@ -310,8 +308,6 @@ void CPlayerEngine::OpenL(const TDesC& aFileName)
         iAutoFast = iMp4->video.width * iMp4->video.height > 320 * 240;
         iAutoN0 = 0; iAutoDec0 = 0; iAutoTick0 = 0;
         ApplyFastMode();
-        // H.264: spare picture buffers for decoding ahead (at most 3 MB of the decoder heap)
-        if (iDec) viddec_set_spare(iDec, KQueueMax, 0x300000);
         own = ETrue;
         if (c == M4V_ERR_NOMEM && !iDec) User::Leave(KErrNoMemory);
         if (c != 0)
@@ -339,10 +335,6 @@ void CPlayerEngine::OpenL(const TDesC& aFileName)
         TBool pic = EFalse;
         TInt d = DecodeSample(0, pic);
         iNext = 1;
-        iQCount = iQHead = 0;
-        iQCap = iDec ? viddec_spare(iDec) - 1 : 0;      // one spare of margin
-        if (iQCap < 0) iQCap = 0;
-        if (iQCap > KQueueMax) iQCap = KQueueMax;
         if (d == M4V_ERR_UNSUPPORTED)
             {
             TBuf<70> why;
@@ -866,7 +858,7 @@ void CPlayerEngine::Play()
         return;
         }
     if (iState == EEnded || (iDurationMs > 0 && iPosMs >= iDurationMs)) SeekToMs(0);
-    iVideoDone = (iMode != EModeOwn) || (iMp4 && iNext >= iMp4->video.count && iQCount == 0);
+    iVideoDone = (iMode != EModeOwn) || (iMp4 && iNext >= iMp4->video.count);
     iAudioDone = EFalse;
     if (iAudio && iAudioReady)
         {
@@ -977,7 +969,6 @@ void CPlayerEngine::SeekToMs(TInt aMs)
         LeaveDecoderHeap(old);
         }
         TBool pic = EFalse;
-        iQCount = iQHead = 0;
         DecodeSample(k, pic);
         iNext = k + 1;
         aMs = (TInt)t->timeMs[k];
@@ -1178,7 +1169,6 @@ void CPlayerEngine::PerfText(TDes& aText)
         aText.AppendFormat(_L("Frame time %d.%d ms%S. "), frame10 / 10, frame10 % 10,
                            dec > frame10 ? &KTooSlow() : &KNullDesC());
         }
-    if (iQCap && !iNoAhead) aText.AppendFormat(_L("Decoding up to %d frames ahead. "), iQCap);
     if (iLateJumps) aText.AppendFormat(_L("Jumped %d. "), iLateJumps);
     if (iBFrames) aText.AppendFormat(_L("B-frames skipped %d. "), iBFrames);
     }
@@ -1271,24 +1261,12 @@ void CPlayerEngine::RunL()
             iNext = k;
             }
         }
-    // Pictures decoded ahead (H.264, see DecodeAhead): the newest one that is due is shown.
-    TBool fromQueue = EFalse;
-    while (iQCount && iQ[iQHead].iTimeMs <= now + 5)
-        {
-        if (fromQueue) iDropped++;          // an older due picture that won't be shown
-        iPic = iQ[iQHead].iPic;
-        iHavePic = ETrue;
-        fromQueue = ETrue;
-        pic = ETrue;
-        iQHead = (iQHead + 1) % KQueueMax;
-        iQCount--;
-        }
     // Decode what is due. Every frame has to be decoded (the next ones are predicted from it), but
     // not every one has to be shown: while the video is behind the sound, keep decoding and only
     // show a picture when it has caught up, or when nothing was shown for KMaxNoShowMs (so the
     // picture still moves). After KMaxRunMs the loop yields so keys still work. This keeps a
     // slow video in sync at a lower frame rate.
-    while (iQCount == 0 && iNext < count && (TInt)t->timeMs[iNext] <= now + 5)
+    while (iNext < count && (TInt)t->timeMs[iNext] <= now + 5)
         {
         TBool got = EFalse;
         TInt r = DecodeSample(iNext, got);
@@ -1311,8 +1289,6 @@ void CPlayerEngine::RunL()
     if (pic && iNext < count && now - (TInt)t->timeMs[iNext] >= KBehindMs &&
         (TInt)(((User::TickCount() - iLastShowTick) * (TUint)iTickUs) / 1000) < MaxNoShowMs())
         show = EFalse;      // still behind: the next RunL goes on decoding first
-    if (fromQueue && decoded && pic) iDropped++;    // the queued picture was overtaken
-    if (fromQueue && !decoded) decoded = 1;         // (for the count below)
     iDropped += show ? decoded - 1 : decoded;
     if (show)
         {
@@ -1320,22 +1296,7 @@ void CPlayerEngine::RunL()
         iLastShowTick = User::TickCount();
         }
 
-    // use the time until the next picture is due to decode ahead
-    if (iQCap > 0 && !iNoAhead && iNext < count && iQCount < iQCap)
-        {
-        TInt due = iQCount ? iQ[iQHead].iTimeMs : (TInt)t->timeMs[iNext];
-        TInt dec = iProfDecoded ? ProfMs10(iProfDecode, iTickDecode, iProfDecoded) / 10 : 40;
-        if (iQCount == 0 || ClockMs() + dec + 5 <= due)
-            {
-            DecodeAhead();
-            AutoFastCheck();
-            iAhead = ETrue;
-            }
-        else iAhead = EFalse;
-        }
-    else iAhead = EFalse;
-
-    if (iNext >= count && iQCount == 0) iVideoDone = ETrue;
+    if (iNext >= count) iVideoDone = ETrue;
     if (iVideoDone && !iAudioPlaying)
         {
         TInt end = count > 0 ? (TInt)t->timeMs[count - 1] : 0;
@@ -1355,42 +1316,12 @@ void CPlayerEngine::RunL()
         }
 
     TInt delay = 100;
-    if (iQCount)
-        delay = iQ[iQHead].iTimeMs - ClockMs();
-    else if (iNext < count)
+    if (iNext < count)
+        {
         delay = (TInt)t->timeMs[iNext] - ClockMs();
-    if (delay > 100) delay = 100;
-    if (iAhead) delay = 0;                  // may decode further ahead (key events still run)
+        if (delay > 100) delay = 100;
+        }
     ScheduleIn(delay);
-    }
-
-// Decodes the next frame into the queue of pictures to show later (H.264 with spare picture
-// buffers: the decoder keeps each picture intact while iQCap + 1 more are decoded). Key frames
-// take about twice as long to decode; with a few frames decoded ahead they no longer make the
-// player skip pictures.
-void CPlayerEngine::DecodeAhead()
-    {
-    const Mp4VideoTrack* t = &iMp4->video;
-    M4vPicture shown = iPic;
-    TBool haveShown = iHavePic;
-    TBool got = EFalse;
-    TInt time = (TInt)t->timeMs[iNext];
-    TInt r = DecodeSample(iNext, got);
-    iNext++;
-    if (got && iQCount < KQueueMax)
-        {
-        TInt k = (iQHead + iQCount) % KQueueMax;
-        iQ[k].iPic = iPic;
-        iQ[k].iTimeMs = time;
-        iQCount++;
-        }
-    iPic = shown;                           // iPic stays the picture on the screen
-    iHavePic = haveShown;
-    if (r == M4V_ERR_NOREF)
-        {
-        TInt k = mp4_key_after(t, iNext - 1);
-        iNext = k < 0 ? t->count : k;
-        }
     }
 
 // ------------------------------------------------------------------ fast H.264

@@ -85,9 +85,6 @@ public:
     TBehind Behind() const { return iBehind; }
     TBool SyncNow() const;
     TBool TooSlow() const { return iTooSlow; }
-    TInt QueueCapacity() const { return iQCap; }
-    void SetAhead(TBool aOn) { iNoAhead = !aOn; }   // decoding ahead (H.264), for comparing
-    TBool Ahead() const { return !iNoAhead; }
     TBool FastNow() const;
     TInt ShownFrames() const { return iShown; }
 
@@ -236,15 +233,7 @@ private:
     TInt iAutoN0;               // decode statistics at the last check
     TUint32 iAutoDec0, iAutoTick0;
     TBehind iBehind;
-    void AutoFastCheck();
-    // pictures decoded ahead, shown when due (H.264)
-    enum { KQueueMax = 16 };
-    struct TQueued { M4vPicture iPic; TInt iTimeMs; };
-    TQueued iQ[KQueueMax];
-    TInt iQHead, iQCount, iQCap;
-    TBool iAhead;
-    TBool iNoAhead;
-    void DecodeAhead();          // the last picture went straight to the screen (the bitmap is older)
+    void AutoFastCheck();          // the last picture went straight to the screen (the bitmap is older)
     };
 
 // ------------------------------------------------------------------ view

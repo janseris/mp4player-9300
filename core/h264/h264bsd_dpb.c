@@ -888,19 +888,6 @@ u8* h264bsdAllocateDpbImage(dpbStorage_t *dpb)
 
     dpb->currentOut = dpb->buffer + dpb->dpbSize;
 
-    /* MP4 Player 9300: decode into the spare that waited longest; the free buffer (whose
-     * picture may still be on its way to the screen) takes its place in the ring */
-    if (dpb->numSpare)
-    {
-        u8 *d = dpb->currentOut->data, *a = dpb->currentOut->pAllocatedData;
-        dpb->currentOut->data = dpb->spareData[dpb->spareNext];
-        dpb->currentOut->pAllocatedData = dpb->spareAlloc[dpb->spareNext];
-        dpb->spareData[dpb->spareNext] = d;
-        dpb->spareAlloc[dpb->spareNext] = a;
-        if (++dpb->spareNext >= dpb->numSpare)
-            dpb->spareNext = 0;
-    }
-
     return(dpb->currentOut->data);
 
 }
@@ -1041,25 +1028,6 @@ u32 h264bsdInitDpb(
             return(MEMORY_ALLOCATION_ERROR);
 
         dpb->buffer[i].data = ALIGN(dpb->buffer[i].pAllocatedData, 16);
-    }
-
-    /* MP4 Player 9300: spares, as many as wanted and fit in the budget (none is no error) */
-    dpb->numSpare = dpb->spareNext = 0;
-    {
-        u32 bytes = picSizeInMbs*384 + 32+15;
-        u32 n = dpb->spareWanted;
-        if (n > DPB_MAX_SPARE)
-            n = DPB_MAX_SPARE;
-        if (bytes && n > dpb->spareBudget / bytes)
-            n = dpb->spareBudget / bytes;
-        for (i = 0; i < n; i++)
-        {
-            ALLOCATE(dpb->spareAlloc[i], bytes, u8);
-            if (dpb->spareAlloc[i] == NULL)
-                break;
-            dpb->spareData[i] = ALIGN(dpb->spareAlloc[i], 16);
-        }
-        dpb->numSpare = i;
     }
 
     ALLOCATE(dpb->list, MAX_NUM_REF_IDX_L0_ACTIVE + 1, dpbPicture_t*);
@@ -1574,11 +1542,6 @@ void h264bsdFreeDpb(dpbStorage_t *dpb)
     FREE(dpb->buffer);
     FREE(dpb->list);
     FREE(dpb->outBuf);
-    for (i = 0; i < dpb->numSpare; i++)
-    {
-        FREE(dpb->spareAlloc[i]);
-    }
-    dpb->numSpare = 0;
 
 }
 
