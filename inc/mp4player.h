@@ -78,6 +78,7 @@ public:
     // no sound: the phone doesn't decode the audio, which leaves more time for the video
     void SetSoundOff(TBool aOff);
     TBool SoundOff() const { return iSoundOff; }
+    TBool LastDirect() const { return iLastDirect; }    // the last picture went straight to the screen
     TBool FastNow() const;
     TInt ShownFrames() const { return iShown; }
 
@@ -343,6 +344,7 @@ public:
     void LoadSettings();
     void SaveSettings();
     void ShowZoomMessage();
+    void SettingsText(TDes& aText);     // all settings in short form, for the info and speed test
     };
 
 class CMp4PlayerDocument : public CEikDocument

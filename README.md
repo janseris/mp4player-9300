@@ -189,6 +189,13 @@ So the player brings its own:
   Emulator instructions per frame (150 frames): 426×240 fast 2.23 M (was 2.33 M), 320×180
   1.85 M (was 1.90 M): about 4–5% less decoding time.
 
+- **1.19 on the phone**: 426×240 fast: decode 48.8 ms (1.18: 51.0). Direct to screen 18.4 ms in
+  fit, 14.8 ms in 1:1; played 1:1 with direct drawing: 250 of 300 frames shown.
+- **1.20**: the info screen (I) and the speed test (B) start with all settings in short form, e.g.
+  `[1.20 | Z 1:1 mid | F win | Q auto=fast | D on, used | M sound]`: version, zoom (and 1:1
+  position), full screen or window, H.264 mode (auto shows what it chose), direct drawing (and
+  whether the last picture used it), sound.
+
 ## Install
 
 `bin/mp4player.sis` (unsigned; Symbian 7.0s installs it after a warning). You can install it through

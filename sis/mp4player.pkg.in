@@ -1,6 +1,6 @@
 ; MP4 Player 9300: video player for the Nokia 9300 / 9500 (Series 80 2.0)
 &EN
-#{"MP4 Player"},(0x0F5A9301),1,19,0
+#{"MP4 Player"},(0x0F5A9301),1,20,0
 ; Series 80 2.0 (Nokia 9300 / 9500)
 (0x101F8ED2), 0, 0, 0, {"Series80ProductID"}
 "EPOC32/release/armi/urel/mp4player.app"-"!:\system\apps\mp4player\mp4player.app"

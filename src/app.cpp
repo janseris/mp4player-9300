@@ -10,7 +10,7 @@
 #include "mp4player.h"
 #include "mp4player.hrh"
 
-_LIT(KAppTitle, "MP4 Player 9300 1.19");
+_LIT(KAppTitle, "MP4 Player 9300 1.20");
 
 // ------------------------------------------------------------------ framework entry points
 
@@ -189,6 +189,11 @@ void CMp4PlayerAppUi::HandleCommandL(TInt aCommand)
             HBufC* text = HBufC::NewLC(600);
             TPtr ptr = text->Des();
             iEngine->Benchmark(ptr);
+            {
+            TBuf<100> set;
+            SettingsText(set);
+            if (ptr.Length() + set.Length() <= ptr.MaxLength()) ptr.Insert(0, set);
+            }
             PlayerMessage(KNullDesC);
             CCknInfoDialog::RunDlgLD(_L("Speed test"), *text);
             CleanupStack::PopAndDestroy(text);
@@ -293,6 +298,11 @@ void CMp4PlayerAppUi::ShowFileInfoL()
     HBufC* text = HBufC::NewLC(700);
     TPtr ptr = text->Des();
     iEngine->InfoText(ptr);
+    {
+    TBuf<100> set;
+    SettingsText(set);
+    if (ptr.Length() + set.Length() <= ptr.MaxLength()) ptr.Insert(0, set);
+    }
     TParsePtrC p(iEngine->FileName());
     TBuf<80> title;
     title.Copy(p.NameAndExt().Left(80));
@@ -345,6 +355,35 @@ void CMp4PlayerAppUi::SaveSettings()
     if (f.Replace(fs, KSettingsFile, EFileWrite) != KErrNone) return;
     f.Write(d);
     f.Close();
+    }
+
+// e.g. "[1.20 | Z 1:1 mid | F win | Q auto=fast | D on, used | M sound] "
+void CMp4PlayerAppUi::SettingsText(TDes& aText)
+    {
+    aText.Zero();
+    aText.Append(_L("["));
+    aText.Append(KAppTitle().Mid(16));          // the version number
+    switch (iView->Zoom())
+        {
+        case CVideoView::EZoomFit: aText.Append(_L(" | Z fit")); break;
+        case CVideoView::EZoomFill: aText.Append(_L(" | Z fill")); break;
+        default:
+            aText.Append(_L(" | Z 1:1 "));
+            aText.Append(iView->CropPos() == CVideoView::ECropTop ? _L("top") :
+                         iView->CropPos() == CVideoView::ECropBottom ? _L("bot") : _L("mid"));
+            break;
+        }
+    aText.Append(iView->FullScreen() ? _L(" | F full") : _L(" | F win"));
+    switch (iEngine->FastMode())
+        {
+        case CPlayerEngine::EFastOn: aText.Append(_L(" | Q fast")); break;
+        case CPlayerEngine::EFastOff: aText.Append(_L(" | Q best")); break;
+        default: aText.Append(iEngine->FastNow() ? _L(" | Q auto=fast") : _L(" | Q auto=best")); break;
+        }
+    if (!iView->DirectEnabled()) aText.Append(_L(" | D off"));
+    else if (iView->DirectState() == CVideoView::EDirectFailed) aText.Append(_L(" | D on, test failed"));
+    else aText.Append(iEngine->LastDirect() ? _L(" | D on, used") : _L(" | D on, not used"));
+    aText.Append(iEngine->SoundOff() ? _L(" | M no sound] ") : _L(" | M sound] "));
     }
 
 void CMp4PlayerAppUi::ShowZoomMessage()
